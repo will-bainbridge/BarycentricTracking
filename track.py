@@ -15,61 +15,89 @@ def flat(x):
 
 #------------------------------------------------------------------------------#
 
-mesh = __import__(sys.argv[1])
+class Mesh(object):
 
-points = np.array(mesh.points, dtype=float)
-faces = np.array(mesh.faces)
-faceOwners = np.array(mesh.faceOwners)
-faceNeighbours = np.array(mesh.faceNeighbours)
-faceTetPoints = np.array([ np.random.randint(len(face)) for face in faces ])
+    def __init__(self, name):
+        mesh = __import__(name)
 
-cells = [ [] for i in range(max(faceOwners) + 1) ]
-for f, c in enumerate(faceOwners):
-    cells[c].append(f)
-for f, c in enumerate(faceNeighbours):
-    cells[c].append(f)
-cells = np.array(cells)
+        self.points = np.array(mesh.points, dtype=float)
 
-faceAreas = np.zeros((len(faces), 3))
-faceCentres = np.zeros((len(faces), 3))
-for f in range(len(faces)):
-    tri1 = points[faces[f]]
-    tri2 = points[np.append(faces[f][1:], faces[f][0])]
-    base = np.mean(tri1, axis=0)
-    triAreas = np.cross(tri1 - base, tri2 - base)
-    triCentres = tri1/3 + tri2/3 + base/3
-    faceAreas[f] = np.sum(triAreas, axis=0)/2
-    m = mag(faceAreas[f])
-    if m != 0:
-        n = faceAreas[f]/m
-        faceCentres[f] = np.sum(triCentres*np.expand_dims(triAreas.dot(n), axis=1), axis=0)/2
-        faceCentres[f] /= faceAreas[f].dot(n)
-    else:
-        faceCentres[f] = np.mean(triCentres, axis=0)
+        self.faces = np.array(mesh.faces)
+        self.faceOwners = np.array(mesh.faceOwners)
+        self.faceNeighbours = np.array(mesh.faceNeighbours)
 
-cellVolumes = np.zeros((len(cells)))
-temp = np.sum(faceAreas*faceCentres, axis=1)/3
-np.add.at(cellVolumes, faceOwners, temp)
-np.subtract.at(cellVolumes, faceNeighbours, temp[:len(faceNeighbours)])
+        self.faceTetPoints = np.array([ np.random.randint(len(face)) for face in self.faces ])
 
-cellCentres = np.zeros((len(cells), 3))
-mask = cellVolumes == 0
-temp = np.expand_dims(np.sum(faceAreas*faceCentres, axis=1), axis=1)*faceCentres/4
-np.add.at(cellCentres, faceOwners, temp)
-np.subtract.at(cellCentres, faceNeighbours, temp[:len(faceNeighbours)])
-if np.any(~mask):
-    cellCentres[~mask] /= np.expand_dims(cellVolumes[~mask], axis=1)
-temp = np.expand_dims(mag(faceAreas, axis=1), axis=1)
-if np.any(mask):
-    cellCentres[mask] = [ np.sum((temp*faceCentres)[cell], axis=0)/np.sum(temp[cell]) for cell in cells[mask] ]
+        self.cells = [ [] for i in range(max(self.faceOwners) + 1) ]
+        for f, c in enumerate(self.faceOwners):
+            self.cells[c].append(f)
+        for f, c in enumerate(self.faceNeighbours):
+            self.cells[c].append(f)
+        self.cells = np.array(self.cells)
+
+        self.pointsOldest = self.points
+        self.calc()
+        self.movePointsWithoutCalc(self.points)
+
+    def calcFaceAreasAndCentres(self):
+        faceAreas = np.zeros((len(self.faces), 3))
+        faceCentres = np.zeros((len(self.faces), 3))
+        for f in range(len(self.faces)):
+            tri1 = self.points[self.faces[f]]
+            tri2 = self.points[np.append(self.faces[f][1:], self.faces[f][0])]
+            base = np.mean(tri1, axis=0)
+            triAreas = np.cross(tri1 - base, tri2 - base)
+            triCentres = tri1/3 + tri2/3 + base/3
+            faceAreas[f] = np.sum(triAreas, axis=0)/2
+            m = mag(faceAreas[f])
+            if m != 0:
+                n = faceAreas[f]/m
+                faceCentres[f] = np.sum(triCentres*np.expand_dims(triAreas.dot(n), axis=1), axis=0)/2
+                faceCentres[f] /= faceAreas[f].dot(n)
+            else:
+                faceCentres[f] = np.mean(triCentres, axis=0)
+        return faceAreas, faceCentres
+
+    def calcCellVolumesAndCentres(self):
+        cellVolumes = np.zeros((len(self.cells)))
+        temp = np.sum(self.faceAreas*self.faceCentres, axis=1)/3
+        np.add.at(cellVolumes, self.faceOwners, temp)
+        np.subtract.at(cellVolumes, self.faceNeighbours, temp[:len(self.faceNeighbours)])
+        cellCentres = np.zeros((len(self.cells), 3))
+        mask = cellVolumes == 0
+        temp = np.expand_dims(np.sum(self.faceAreas*self.faceCentres, axis=1), axis=1)*self.faceCentres/4
+        np.add.at(cellCentres, self.faceOwners, temp)
+        np.subtract.at(cellCentres, self.faceNeighbours, temp[:len(self.faceNeighbours)])
+        if np.any(~mask):
+            cellCentres[~mask] /= np.expand_dims(cellVolumes[~mask], axis=1)
+        temp = np.expand_dims(mag(self.faceAreas, axis=1), axis=1)
+        if np.any(mask):
+            cellCentres[mask] = [ np.sum((temp*self.faceCentres)[cell], axis=0)/np.sum(temp[cell]) for cell in self.cells[mask] ]
+        return cellVolumes, cellCentres
+
+    def calc(self):
+        self.faceAreas, self.faceCentres = self.calcFaceAreasAndCentres()
+        self.cellVolumes, self.cellCentres = self.calcCellVolumesAndCentres()
+
+    def movePointsWithoutCalc(self, newPoints):
+        self.pointsOld = self.points
+        self.points = newPoints
+        self.faceAreasOld, self.faceCentresOld = self.faceAreas, self.faceCentres
+        self.cellVolumesOld, self.cellCentresOld = self.cellVolumes, self.cellCentres
+
+    def movePoints(self, newPoints):
+        self.movePointsWithoutCalc(newPoints)
+        self.calc()
+
+mesh = Mesh(sys.argv[1])
 
 #------------------------------------------------------------------------------#
 
 def faceBehind(f, i, n):
-    return (i + len(faces[f]) - n) % len(faces[f])
+    return (i + len(mesh.faces[f]) - n) % len(mesh.faces[f])
 
 def faceAhead(f, i, n):
-    return (i + n) % len(faces[f])
+    return (i + n) % len(mesh.faces[f])
 
 def isOwnerTet(t):
     return t >= 0
@@ -87,21 +115,21 @@ def otherTet(t):
     return neighbourTet(t) if isOwnerTet(t) else ownerTet(t)
 
 def getTetTopology(f, t):
-    c = faceOwners[f] if isOwnerTet(t) else faceNeighbours[f]
-    iB = faceTetPoints[f]
+    c = mesh.faceOwners[f] if isOwnerTet(t) else mesh.faceNeighbours[f]
+    iB = mesh.faceTetPoints[f]
     i1 = faceAhead(f, iB, ownerTet(t))
     i2 = faceAhead(f, iB, ownerTet(t) + 1)
-    pB = faces[f][iB]
-    p1 = faces[f][i1 if isOwnerTet(t) else i2]
-    p2 = faces[f][i2 if isOwnerTet(t) else i1]
+    pB = mesh.faces[f][iB]
+    p1 = mesh.faces[f][i1 if isOwnerTet(t) else i2]
+    p2 = mesh.faces[f][i2 if isOwnerTet(t) else i1]
     return c, pB, p1, p2
 
 def getTetGeometry(f, t):
     c, pB, p1, p2 = getTetTopology(f, t)
-    vO = cellCentres[c]
-    vB = points[pB]
-    v1 = points[p1]
-    v2 = points[p2]
+    vO = mesh.cellCentres[c]
+    vB = mesh.points[pB]
+    v1 = mesh.points[p1]
+    v2 = mesh.points[p2]
     return vO, vB, v1, v2
 
 def getTetTransform(f, t):
@@ -142,8 +170,8 @@ def fromTetCoordinates(f, t, x):
     return A.dot(fromBarycentricPosition(x)) + origin
 
 def findTet(x):
-    for f in range(len(faces)):
-        for t in range(1, len(faces[f]) - 1):
+    for f in range(len(mesh.faces)):
+        for t in range(1, len(mesh.faces[f]) - 1):
             y = toTetCoordinates(f, t, x)
             if np.min(y) >= 0 and np.max(y) <= 1:
                 return f, t, y
@@ -168,35 +196,35 @@ def updatePlot(plot, data):
     plot.set_3d_properties(data[:,2])
 
 def updatePointsPlot(plot):
-    updatePlot(plot, points)
+    updatePlot(plot, mesh.points)
 
 def updateFacesPlot(plot, shrink=0.8, centres=None):
     if centres is None:
-        centres = faceCentres
-    temp = points[flat(faces)]
+        centres = mesh.faceCentres
+    temp = mesh.points[flat(mesh.faces)]
     lines = np.array([
         temp,
-        points[flat( np.roll(face, 1) for face in faces )],
+        mesh.points[flat( np.roll(face, 1) for face in mesh.faces )],
         np.nan*np.ones(temp.shape)
         ]).swapaxes(0, 1)
     origins = np.expand_dims(flat(
         np.ones((len(face), 1))*centre
-        for face, centre in zip(faces, centres) ), axis=1)
+        for face, centre in zip(mesh.faces, centres) ), axis=1)
     temp = np.reshape(shrink*(lines - origins) + origins, (3*lines.shape[0], 3))
     updatePlot(plot, temp)
 
 def updateCellsPlot(plot, shrink=0.8, centres=None):
     if centres is None:
-        centres = cellCentres
-    temp = points[flat(flat( faces[cell] for cell in cells ))]
+        centres = mesh.cellCentres
+    temp = mesh.points[flat(flat( mesh.faces[cell] for cell in mesh.cells ))]
     lines = np.array([
         temp,
-        points[flat( np.roll(face, 1) for face in flat( faces[cell] for cell in cells ))],
+        mesh.points[flat( np.roll(face, 1) for face in flat( mesh.faces[cell] for cell in mesh.cells ))],
         np.nan*np.ones(temp.shape)
         ]).swapaxes(0, 1)
     origins = np.expand_dims(flat(
-        np.ones((len(flat(faces[cell])), 1))*centre
-        for cell, centre in zip(cells, centres) ), axis=1)
+        np.ones((len(flat(mesh.faces[cell])), 1))*centre
+        for cell, centre in zip(mesh.cells, centres) ), axis=1)
     temp = np.reshape(shrink*(lines - origins) + origins, (3*lines.shape[0], 3))
     updatePlot(plot, temp)
 
@@ -232,7 +260,7 @@ def changeFace(f, t, i, y0):
     '''
     # Get the tet topology
     c, pB, p1, p2 = getTetTopology(f, t)
-    isOwner = faceOwners[f] == c
+    isOwner = mesh.faceOwners[f] == c
     # Find the face with the shared edge
     if i == 1:
         edge = [p1, p2]
@@ -242,14 +270,14 @@ def changeFace(f, t, i, y0):
         edge = [pB, p1]
     else:
         assert False
-    temp = [ g for g in cells[c] if g != f and set(edge).issubset(faces[g]) ]
+    temp = [ g for g in mesh.cells[c] if g != f and set(edge).issubset(mesh.faces[g]) ]
     assert len(temp) == 1
     g = temp[0]
     # Get the tet point on the new face
-    isNewOwner = faceOwners[g] == c
-    u = list(faces[g]).index(edge[isNewOwner]) - faceTetPoints[g]
-    u = (u + len(faces[g])) % len(faces[g])
-    u = np.clip(u, 1, len(faces[g]) - 2)
+    isNewOwner = mesh.faceOwners[g] == c
+    u = list(mesh.faces[g]).index(edge[isNewOwner]) - mesh.faceTetPoints[g]
+    u = (u + len(mesh.faces[g])) % len(mesh.faces[g])
+    u = np.clip(u, 1, len(mesh.faces[g]) - 2)
     u = ownerTet(u) if isNewOwner else neighbourTet(u)
     # Get the new tet topology
     c, qB, q1, q2 = getTetTopology(g, u)
@@ -275,7 +303,7 @@ def changeTet(f, t, i, y0):
         return changeFace(f, t, i, y0)
     elif i == 2:
         if isOwnerTet(t):
-            if t == len(faces[f]) - 2:
+            if t == len(mesh.faces[f]) - 2:
                 return changeFace(f, t, i, y0)
             else:
                 return f, t + 1, y0[[0,1,3,2]]
@@ -291,7 +319,7 @@ def changeTet(f, t, i, y0):
             else:
                 return f, t - 1, y0[[0,1,3,2]]
         else:
-            if ownerTet(t) == len(faces[f]) - 2:
+            if ownerTet(t) == len(mesh.faces[f]) - 2:
                 return changeFace(f, t, i, y0)
             else:
                 return f, neighbourTet(ownerTet(t) + 1), y0[[0,1,3,2]]
@@ -332,8 +360,8 @@ from mpl_toolkits.mplot3d import Axes3D
 # Set up the figure and scale the axes
 fg = pp.figure()
 ax = fg.add_subplot(111, projection='3d')
-minPoints = np.min(points, axis=0)
-maxPoints = np.max(points, axis=0)
+minPoints = np.min(mesh.points, axis=0)
+maxPoints = np.max(mesh.points, axis=0)
 ax.set_xlim3d(minPoints[0], maxPoints[0])
 ax.set_ylim3d(minPoints[1], maxPoints[1])
 ax.set_zlim3d(minPoints[2], maxPoints[2])
@@ -344,55 +372,10 @@ plots = [createPointsPlot(ax), createFacesPlot(ax), createCellsPlot(ax), createT
 
 #------------------------------------------------------------------------------#
 
-## Update the mesh plots. These would need moving into the draw function if the mesh were moving.
-#updatePointsPlot(plots[0])
-#updateFacesPlot(plots[1])
-#updateCellsPlot(plots[2])
-#
-## Define the frame drawing function
-#def draw(data, *plots):
-#    # If in the interior of a tet, then reset the track
-#    if draw.i == -1:
-#        draw.f, draw.t, draw.y = findTet(draw.x0)
-#        draw.l = 0
-#        draw.path = [draw.x0]
-#        draw.moving = True
-#        updateTetPlot(plots[3], draw.f, draw.t, shrink=1.0)
-#    # If we are moving, then track through the tet and update the path plot
-#    if draw.moving == True:
-#        draw.y, draw.i, draw.l = trackThroughTet(draw.f, draw.t, draw.y, draw.x1, draw.l)
-#        draw.path.append(fromTetCoordinates(draw.f, draw.t, draw.y))
-#        updatePlot(plots[4], np.array(draw.path))
-#    # If we are not moving, then transform to the next tet and update the tet plot
-#    else:
-#        draw.f, draw.t, draw.y = changeTet(draw.f, draw.t, draw.i, draw.y)
-#        updateTetPlot(plots[3], draw.f, draw.t, shrink=1.0)
-#    # Toggle the state
-#    draw.moving = not draw.moving
-#
-## Initialise the track
-#draw.x0 = np.array([ float(x) for x in sys.argv[2].split(',') ])
-#draw.x1 = np.array([ float(x) for x in sys.argv[3].split(',') ])
-#draw.i = -1
-#
-### Draw
-##while True:
-##    draw(None, *plots)
-##    if draw.i == -1:
-##        break
-##pp.show()
-#
-## Animate
-#animation = an.FuncAnimation(fg, draw, fargs=(plots), interval=500)
-#pp.show()
-
-#------------------------------------------------------------------------------#
-
 path = __import__(sys.argv[2])
 timeStep = float(sys.argv[3])
 
 #motion = __import__('motion1')
-#points0 = points.copy()
 
 def track(data, *plots):
     # If the track is finished, set up the next one
@@ -411,7 +394,7 @@ def track(data, *plots):
     updatePlot(plots[4], np.array(track.path))
 
     #track.time += timeStep
-    #points[:] = motion.position(track.time, points0)
+    #mesh.movePoints(motion.position(track.time, mesh.pointsOldest))
     #updatePointsPlot(plots[0])
     #updateFacesPlot(plots[1])
     #updateCellsPlot(plots[2])
