@@ -134,14 +134,67 @@ def getTetGeometry(f, t):
 
 def getTetTransform(f, t):
     vO, vB, v1, v2 = getTetGeometry(f, t)
-    return vO, np.array([vB - vO, v1 - vO, v2 - vO]).T
+    dB = vB - vO
+    d1 = v1 - vO
+    d2 = v2 - vO
+    A = np.array([dB, d1, d2]).T
+    return vO, A
 
 def getTetReverseTransform(f, t):
     vO, vB, v1, v2 = getTetGeometry(f, t)
-    xB = np.cross(v1 - vO, v2 - vO)
-    x1 = np.cross(v2 - vO, vB - vO)
-    x2 = np.cross(vB - vO, v1 - vO)
-    return vO, (vB - vO).dot(xB), np.array([xB, x1, x2])
+    dB = vB - vO
+    d1 = v1 - vO
+    d2 = v2 - vO
+    detA = dB.dot(np.cross(d1, d2))
+    T = np.array([
+        np.cross(d1, d2),
+        np.cross(d2, dB),
+        np.cross(dB, d1),
+        ])
+    return vO, detA, T
+
+def getMovingTetGeometry(f, t):
+    c, pB, p1, p2 = getTetTopology(f, t)
+    vO = np.array([mesh.cellCentresOld[c], mesh.cellCentres[c] - mesh.cellCentresOld[c]])
+    vB = np.array([mesh.pointsOld[pB], mesh.points[pB] - mesh.pointsOld[pB]])
+    v1 = np.array([mesh.pointsOld[p1], mesh.points[p1] - mesh.pointsOld[p1]])
+    v2 = np.array([mesh.pointsOld[p2], mesh.points[p2] - mesh.pointsOld[p2]])
+    return vO, vB, v1, v2
+
+def getMovingTetTransform(f, t):
+    vO, vB, v1, v2 = getMovingTetGeometry(f, t)
+    dB = vB - vO
+    d1 = v1 - vO
+    d2 = v2 - vO
+    A0 = np.array([dB[0], d1[0], d2[0]]).T
+    A1 = np.array([dB[1], d1[1], d2[1]]).T
+    return vO, np.array([A0, A1])
+
+def getMovingTetReverseTransform(f, t):
+    vO, vB, v1, v2 = getMovingTetGeometry(f, t)
+    dB = vB - vO
+    d1 = v1 - vO
+    d2 = v2 - vO
+    detA0 = dB[0].dot(np.cross(d1[0], d2[0]))
+    detA1 = dB[1].dot(np.cross(d1[0], d2[0])) + dB[0].dot(np.cross(d1[1], d2[0])) + dB[0].dot(np.cross(d1[0], d2[1]))
+    detA2 = dB[0].dot(np.cross(d1[1], d2[1])) + dB[1].dot(np.cross(d1[0], d2[1])) + dB[1].dot(np.cross(d1[1], d2[0]))
+    detA3 = dB[1].dot(np.cross(d1[1], d2[1]))
+    T0 = np.array([
+        np.cross(d1[0], d2[0]),
+        np.cross(d2[0], dB[0]),
+        np.cross(dB[0], d1[0]),
+        ])
+    T1 = np.array([
+        np.cross(d1[0], d2[1]) + np.cross(d1[1], d2[0]),
+        np.cross(d2[0], dB[1]) + np.cross(d2[1], dB[0]),
+        np.cross(dB[0], d1[1]) + np.cross(dB[1], d1[0]),
+        ])
+    T2 = np.array([
+        np.cross(d1[1], d2[1]),
+        np.cross(d2[1], dB[1]),
+        np.cross(dB[1], d1[1]),
+        ])
+    return vO, np.array([detA0, detA1, detA2, detA3]), np.array([T0, T1, T2])
 
 def toBarycentricPosition(x):
     assert x.shape == (3, )
@@ -153,11 +206,11 @@ def toBarycentricDisplacement(x):
 
 def fromBarycentricPosition(x):
     assert x.shape == (4, )
-    return (x/np.sum(x))[1:]
+    return (x/np.sum(x))[1:] # <-- Assumes barycentrics function like homogeneous coordinates.
 
-def fromBarycentricDisplacement(x):
-    assert x.shape == (4, )
-    return x[1:] # <-- ?
+#def fromBarycentricDisplacement(x):
+#    assert x.shape == (4, )
+#    return x[1:] # <-- Is this sufficient? How could it be normalised? The sum is zero for a displacement.
 
 def toTetCoordinates(f, t, x):
     origin, detA, T = getTetReverseTransform(f, t)
@@ -167,6 +220,21 @@ def toTetCoordinates(f, t, x):
 
 def fromTetCoordinates(f, t, x):
     origin, A = getTetTransform(f, t)
+    return A.dot(fromBarycentricPosition(x)) + origin
+
+def toMovingTetCoordinates(f, t, x, l):
+    origin_, detA_, T_ = getTetMovingTransform(f, t)
+    origin = origin_[0] + origin_[1]*l
+    detA = detA_[0] + detA_[1]*l + detA_[2]*l**2 + detA_[3]*l**3
+    T = T_[0] + T_[1]*l + T_[2]*l**2
+    if detA == 0:
+        return np.ones(4)*np.nan
+    return toBarycentricPosition(T.dot(x - origin)/detA)
+
+def fromMovingTetCoordinates(f, t, x, l):
+    origin_, A_ = getMovingTetTransform(f, t)
+    origin = origin_[0] + origin_[1]*l
+    A = A_[0] + A_[1]*l
     return A.dot(fromBarycentricPosition(x)) + origin
 
 def findTet(x):
@@ -332,24 +400,33 @@ def trackThroughTet(f, t, y0, x1, l):
     notes for how this works.
     '''
     # Get the tet geometry
-    o, detA, T = getTetReverseTransform(f, t)
+    origin, detA, T = getTetReverseTransform(f, t)
     # Get the local displacement
-    detAY1 = toBarycentricDisplacement(T.dot((1 - l)*x1))
+    TX1 = toBarycentricDisplacement(T.dot((1 - l)*x1))
     iH = -1
-    lHByDetA = np.finfo(float).max if detA == 0 else np.abs(1/detA)
+    muH = np.finfo(float).max if detA == 0 else np.abs(1/detA)
     for i in range(4):
-        if detAY1[i] != 0:
-            lByDetA = - y0[i]/detAY1[i]
-            if 0 < lByDetA and lByDetA < lHByDetA:
+        if TX1[i] != 0:
+            mu = - y0[i]/TX1[i]
+            if 0 < mu and mu < muH:
                 iH = i
-                lHByDetA = lByDetA
+                muH = mu
     # Set the new y
-    yH = y0 + lHByDetA*detAY1
+    yH = y0 + muH*TX1
     # Remove tolerance issues in the event of a hit
     if iH != -1:
         yH[iH] = 0
     # Return the hit index, he new position, and the new tracking parameter
-    return yH, iH, l + (1 - l)*lHByDetA*detA
+    return yH, iH, l + (1 - l)*muH*detA
+
+def trackThroughMovingTet(f, t, y0, x1, l):
+    '''
+    This performs the track in the same way as the function above, but for a
+    moving tet.
+    '''
+    origin, detA, T = getMovingTetReverseTransform(f, t)
+    # ...
+    raise NotImplementedError
 
 #------------------------------------------------------------------------------#
 
@@ -368,7 +445,6 @@ ax.set_zlim3d(minPoints[2], maxPoints[2])
 
 # Create the plots
 plots = [createPointsPlot(ax), createFacesPlot(ax), createCellsPlot(ax), createTetPlot(ax), ax.plot([], [], [], 'bo--')[0]]
-
 
 #------------------------------------------------------------------------------#
 
