@@ -4,6 +4,7 @@ import numpy as np
 import sys
 
 np.set_printoptions(suppress=True)
+np.random.seed(0)
 
 #------------------------------------------------------------------------------#
 
@@ -36,10 +37,10 @@ class Mesh(object):
         self.cells = np.array(self.cells)
 
         self.pointsOldest = self.points
-        self.calc()
-        self.movePointsWithoutCalc(self.points)
+        self.update()
+        self.movePointsWithoutUpdate(self.points)
 
-    def calcFaceAreasAndCentres(self):
+    def getFaceAreasAndCentres(self):
         faceAreas = np.zeros((len(self.faces), 3))
         faceCentres = np.zeros((len(self.faces), 3))
         for f in range(len(self.faces)):
@@ -58,7 +59,7 @@ class Mesh(object):
                 faceCentres[f] = np.mean(triCentres, axis=0)
         return faceAreas, faceCentres
 
-    def calcCellVolumesAndCentres(self):
+    def getCellVolumesAndCentres(self):
         cellVolumes = np.zeros((len(self.cells)))
         temp = np.sum(self.faceAreas*self.faceCentres, axis=1)/3
         np.add.at(cellVolumes, self.faceOwners, temp)
@@ -75,21 +76,29 @@ class Mesh(object):
             cellCentres[mask] = [ np.sum((temp*self.faceCentres)[cell], axis=0)/np.sum(temp[cell]) for cell in self.cells[mask] ]
         return cellVolumes, cellCentres
 
-    def calc(self):
-        self.faceAreas, self.faceCentres = self.calcFaceAreasAndCentres()
-        self.cellVolumes, self.cellCentres = self.calcCellVolumesAndCentres()
+    def getIntermediatePoints(self, l):
+        return l*self.points + (1 - l)*self.pointsOld
 
-    def movePointsWithoutCalc(self, newPoints):
+    def update(self):
+        self.faceAreas, self.faceCentres = self.getFaceAreasAndCentres()
+        self.cellVolumes, self.cellCentres = self.getCellVolumesAndCentres()
+
+    def movePointsWithoutUpdate(self, newPoints):
         self.pointsOld = self.points
         self.points = newPoints
         self.faceAreasOld, self.faceCentresOld = self.faceAreas, self.faceCentres
         self.cellVolumesOld, self.cellCentresOld = self.cellVolumes, self.cellCentres
 
     def movePoints(self, newPoints):
-        self.movePointsWithoutCalc(newPoints)
-        self.calc()
+        self.movePointsWithoutUpdate(newPoints)
+        self.update()
 
-mesh = Mesh(sys.argv[1])
+#------------------------------------------------------------------------------#
+
+timeStep = float(sys.argv[1])
+mesh = Mesh(sys.argv[2])
+path = __import__(sys.argv[3])
+motion = __import__(sys.argv[4]) if len(sys.argv) > 4 else None
 
 #------------------------------------------------------------------------------#
 
@@ -141,28 +150,32 @@ def getTetTransform(f, t):
     return vO, A
 
 def getTetReverseTransform(f, t):
-    vO, vB, v1, v2 = getTetGeometry(f, t)
-    dB = vB - vO
-    d1 = v1 - vO
-    d2 = v2 - vO
+    vO, A = getTetTransform(f, t)
+    dB = A[:,0]
+    d1 = A[:,1]
+    d2 = A[:,2]
     detA = dB.dot(np.cross(d1, d2))
     T = np.array([
-        np.cross(d1, d2),
-        np.cross(d2, dB),
-        np.cross(dB, d1),
-        ])
+            np.cross(d1, d2),
+            np.cross(d2, dB),
+            np.cross(dB, d1),
+            ])
     return vO, detA, T
 
-def getMovingTetGeometry(f, t):
+def getMovingTetGeometry(f, t, l):
     c, pB, p1, p2 = getTetTopology(f, t)
-    vO = np.array([mesh.cellCentresOld[c], mesh.cellCentres[c] - mesh.cellCentresOld[c]])
-    vB = np.array([mesh.pointsOld[pB], mesh.points[pB] - mesh.pointsOld[pB]])
-    v1 = np.array([mesh.pointsOld[p1], mesh.points[p1] - mesh.pointsOld[p1]])
-    v2 = np.array([mesh.pointsOld[p2], mesh.points[p2] - mesh.pointsOld[p2]])
+    vO = np.array([mesh.cellCentresOld[c], mesh.cellCentres[c]])
+    vB = np.array([mesh.pointsOld[pB], mesh.points[pB]])
+    v1 = np.array([mesh.pointsOld[p1], mesh.points[p1]])
+    v2 = np.array([mesh.pointsOld[p2], mesh.points[p2]])
+    vO = np.array([vO[0] + l*(vO[1] - vO[0]), (1 - l)*(vO[1] - vO[0])])
+    vB = np.array([vB[0] + l*(vB[1] - vB[0]), (1 - l)*(vB[1] - vB[0])])
+    v1 = np.array([v1[0] + l*(v1[1] - v1[0]), (1 - l)*(v1[1] - v1[0])])
+    v2 = np.array([v2[0] + l*(v2[1] - v2[0]), (1 - l)*(v2[1] - v2[0])])
     return vO, vB, v1, v2
 
-def getMovingTetTransform(f, t):
-    vO, vB, v1, v2 = getMovingTetGeometry(f, t)
+def getMovingTetTransform(f, t, l):
+    vO, vB, v1, v2 = getMovingTetGeometry(f, t, l)
     dB = vB - vO
     d1 = v1 - vO
     d2 = v2 - vO
@@ -170,11 +183,11 @@ def getMovingTetTransform(f, t):
     A1 = np.array([dB[1], d1[1], d2[1]]).T
     return vO, np.array([A0, A1])
 
-def getMovingTetReverseTransform(f, t):
-    vO, vB, v1, v2 = getMovingTetGeometry(f, t)
-    dB = vB - vO
-    d1 = v1 - vO
-    d2 = v2 - vO
+def getMovingTetReverseTransform(f, t, l):
+    vO, A = getMovingTetTransform(f, t, l)
+    dB = A[:,:,0]
+    d1 = A[:,:,1]
+    d2 = A[:,:,2]
     detA0 = dB[0].dot(np.cross(d1[0], d2[0]))
     detA1 = dB[1].dot(np.cross(d1[0], d2[0])) + dB[0].dot(np.cross(d1[1], d2[0])) + dB[0].dot(np.cross(d1[0], d2[1]))
     detA2 = dB[0].dot(np.cross(d1[1], d2[1])) + dB[1].dot(np.cross(d1[0], d2[1])) + dB[1].dot(np.cross(d1[1], d2[0]))
@@ -196,6 +209,13 @@ def getMovingTetReverseTransform(f, t):
         ])
     return vO, np.array([detA0, detA1, detA2, detA3]), np.array([T0, T1, T2])
 
+#motion = __import__('motion1')
+#print('TET', *getTetReverseTransform(0, 1), sep='\n')
+##mesh.movePoints(motion.position(0.1, mesh.pointsOldest))
+#mesh.movePoints(mesh.pointsOldest + 0.1*np.random.rand(*mesh.points.shape))
+#print('MOVING TET', *getMovingTetReverseTransform(0, 1, 0), sep='\n')
+#exit(1)
+
 def toBarycentricPosition(x):
     assert x.shape == (3, )
     return np.append(1 - np.sum(x), x)
@@ -212,35 +232,43 @@ def fromBarycentricPosition(x):
 #    assert x.shape == (4, )
 #    return x[1:] # <-- Is this sufficient? How could it be normalised? The sum is zero for a displacement.
 
-def toTetCoordinates(f, t, x):
+def fromTetCoordinates(f, t, y, l):
+    origin, A = getTetTransform(f, t)
+    return A.dot(fromBarycentricPosition(y)) + origin
+
+def toTetCoordinates(f, t, x, l):
     origin, detA, T = getTetReverseTransform(f, t)
     if detA == 0:
         return np.ones(4)*np.nan
     return toBarycentricPosition(T.dot(x - origin)/detA)
 
-def fromTetCoordinates(f, t, x):
-    origin, A = getTetTransform(f, t)
-    return A.dot(fromBarycentricPosition(x)) + origin
+def fromMovingTetCoordinates(f, t, y, l):
+    origin, A = getMovingTetTransform(f, t, l)
+    return A[0].dot(fromBarycentricPosition(y)) + origin[0]
+
+    #origin_, A_ = getMovingTetTransform(f, t, l)
+    #origin = origin_[0] + origin_[1]*l
+    #A = A_[0] + A_[1]*l
+    #return A.dot(fromBarycentricPosition(y)) + origin
 
 def toMovingTetCoordinates(f, t, x, l):
-    origin_, detA_, T_ = getTetMovingTransform(f, t)
-    origin = origin_[0] + origin_[1]*l
-    detA = detA_[0] + detA_[1]*l + detA_[2]*l**2 + detA_[3]*l**3
-    T = T_[0] + T_[1]*l + T_[2]*l**2
-    if detA == 0:
+    origin, detA, T = getTetMovingTransform(f, t)
+    if detA[0] == 0:
         return np.ones(4)*np.nan
-    return toBarycentricPosition(T.dot(x - origin)/detA)
+    return toBarycentricPosition(T[0].dot(x - origin[0])/detA[0])
 
-def fromMovingTetCoordinates(f, t, x, l):
-    origin_, A_ = getMovingTetTransform(f, t)
-    origin = origin_[0] + origin_[1]*l
-    A = A_[0] + A_[1]*l
-    return A.dot(fromBarycentricPosition(x)) + origin
+    #origin_, detA_, T_ = getTetMovingTransform(f, t)
+    #origin = origin_[0] + origin_[1]*l
+    #detA = detA_[0] + detA_[1]*l + detA_[2]*l**2 + detA_[3]*l**3
+    #T = T_[0] + T_[1]*l + T_[2]*l**2
+    #if detA == 0:
+    #    return np.ones(4)*np.nan
+    #return toBarycentricPosition(T.dot(x - origin)/detA)
 
 def findTet(x):
     for f in range(len(mesh.faces)):
         for t in range(1, len(mesh.faces[f]) - 1):
-            y = toTetCoordinates(f, t, x)
+            y = toTetCoordinates(f, t, x, 0)
             if np.min(y) >= 0 and np.max(y) <= 1:
                 return f, t, y
     assert False
@@ -263,16 +291,17 @@ def updatePlot(plot, data):
     plot.set_data(data[:,0], data[:,1])
     plot.set_3d_properties(data[:,2])
 
-def updatePointsPlot(plot):
-    updatePlot(plot, mesh.points)
+def updatePointsPlot(plot, l):
+    updatePlot(plot, mesh.getIntermediatePoints(l))
 
-def updateFacesPlot(plot, shrink=0.8, centres=None):
+def updateFacesPlot(plot, l, shrink=0.8, centres=None):
     if centres is None:
         centres = mesh.faceCentres
-    temp = mesh.points[flat(mesh.faces)]
+    points = mesh.getIntermediatePoints(l)
+    temp = points[flat(mesh.faces)]
     lines = np.array([
         temp,
-        mesh.points[flat( np.roll(face, 1) for face in mesh.faces )],
+        points[flat( np.roll(face, 1) for face in mesh.faces )],
         np.nan*np.ones(temp.shape)
         ]).swapaxes(0, 1)
     origins = np.expand_dims(flat(
@@ -281,13 +310,14 @@ def updateFacesPlot(plot, shrink=0.8, centres=None):
     temp = np.reshape(shrink*(lines - origins) + origins, (3*lines.shape[0], 3))
     updatePlot(plot, temp)
 
-def updateCellsPlot(plot, shrink=0.8, centres=None):
+def updateCellsPlot(plot, l, shrink=0.8, centres=None):
     if centres is None:
         centres = mesh.cellCentres
-    temp = mesh.points[flat(flat( mesh.faces[cell] for cell in mesh.cells ))]
+    points = mesh.getIntermediatePoints(l)
+    temp = points[flat(flat( mesh.faces[cell] for cell in mesh.cells ))]
     lines = np.array([
         temp,
-        mesh.points[flat( np.roll(face, 1) for face in flat( mesh.faces[cell] for cell in mesh.cells ))],
+        points[flat( np.roll(face, 1) for face in flat( mesh.faces[cell] for cell in mesh.cells ))],
         np.nan*np.ones(temp.shape)
         ]).swapaxes(0, 1)
     origins = np.expand_dims(flat(
@@ -296,8 +326,8 @@ def updateCellsPlot(plot, shrink=0.8, centres=None):
     temp = np.reshape(shrink*(lines - origins) + origins, (3*lines.shape[0], 3))
     updatePlot(plot, temp)
 
-def updateTetPlot(plot, f, t, shrink=0.8, centre=None):
-    vO, vB, v1, v2 = getTetGeometry(f, t)
+def updateTetPlot(plot, f, t, l, shrink=0.8, centre=None):
+    vO, vB, v1, v2 = [ v[0] for v in getMovingTetGeometry(f, t, l) ]
     vN = np.nan*np.ones(3)
     if centre is None:
         centre = (vO + vB + v1 + v2)/4
@@ -403,6 +433,7 @@ def trackThroughTet(f, t, y0, x1, l):
     origin, detA, T = getTetReverseTransform(f, t)
     # Get the local displacement
     TX1 = toBarycentricDisplacement(T.dot((1 - l)*x1))
+    # Calculate the hit fraction
     iH = -1
     muH = np.finfo(float).max if detA == 0 else np.abs(1/detA)
     for i in range(4):
@@ -416,7 +447,7 @@ def trackThroughTet(f, t, y0, x1, l):
     # Remove tolerance issues in the event of a hit
     if iH != -1:
         yH[iH] = 0
-    # Return the hit index, he new position, and the new tracking parameter
+    # Return the hit index, the new position, and the new tracking parameter
     return yH, iH, l + (1 - l)*muH*detA
 
 def trackThroughMovingTet(f, t, y0, x1, l):
@@ -424,9 +455,49 @@ def trackThroughMovingTet(f, t, y0, x1, l):
     This performs the track in the same way as the function above, but for a
     moving tet.
     '''
-    origin, detA, T = getMovingTetReverseTransform(f, t)
-    # ...
-    raise NotImplementedError
+    # Get the tet geometry
+    origin, detA, T = getMovingTetReverseTransform(f, t, l)
+    # Form the determinant and hit polynomials
+    x0 = fromMovingTetCoordinates(f, t, y0, l)
+    x0Rel = x0 - origin[0]
+    x1Rel = (1 - l)*(x1 - origin[1])
+    detAPoly = np.array([1, detA[1], detA[2]*detA[0], detA[3]*detA[0]**2])
+    hitPolyB12 = np.array([
+        y0[1:],
+        T[0].dot(x1Rel) + T[1].dot(x0Rel),
+        (T[1].dot(x1Rel) + T[2].dot(x0Rel))*detA[0],
+        (T[2].dot(x1Rel))*detA[0]**2,
+        ]).T
+    hitPolyO = np.expand_dims(detAPoly - np.sum(hitPolyB12, axis=0), axis=0)
+    hitPoly = np.append(hitPolyO, hitPolyB12, axis=0)
+    # Calculate the hit fraction
+    iH = -1
+    muH = np.finfo(float).max if detA[0] == 0 else np.abs(1/detA[0])
+    print(muH)
+    for i in range(4):
+        muRoots = np.roots(hitPoly[i][::-1]) # <-- Numpy seems to handle quadratic and linear functions fine
+        print(i, muRoots, end=': ')
+        muRoots = np.real(muRoots[np.isreal(muRoots)]) # <-- The np.isreal method won't work when there is a small imaginary error
+        print(muRoots, end=': ')
+        muRoots = muRoots[(0 < muRoots) & (muRoots < muH)]
+        print(muRoots)
+        if muRoots.size:
+            iH = i
+            muH = np.min(muRoots)
+    # Set the new y
+    detAPolyVal = detAPoly[0] + muH*detAPoly[1] + muH*muH*detAPoly[2] + muH*muH*muH*detAPoly[3]
+    hitPolyVal = hitPoly[:,0] + muH*hitPoly[:,1] + muH*muH*hitPoly[:,2] + muH*muH*muH*hitPoly[:,3]
+    yH = hitPolyVal/detAPolyVal # <-- This calculation will need special handling for cases when both polynomials approach zero
+    # Remove tolerance issues in the event of a hit
+    if iH != -1:
+        yH[iH] = 0
+
+    print(iH, yH)
+    if np.any(0 > yH) or np.any(yH > 1):
+        raise NameError('The track is outside the tet')
+
+    # Return the hit index, the new position, and the new tracking parameter
+    return yH, iH, l + (1 - l)*muH*detA[0]
 
 #------------------------------------------------------------------------------#
 
@@ -446,34 +517,28 @@ ax.set_zlim3d(minPoints[2], maxPoints[2])
 # Create the plots
 plots = [createPointsPlot(ax), createFacesPlot(ax), createCellsPlot(ax), createTetPlot(ax), ax.plot([], [], [], 'bo--')[0]]
 
-#------------------------------------------------------------------------------#
-
-path = __import__(sys.argv[2])
-timeStep = float(sys.argv[3])
-
-#motion = __import__('motion1')
-
 def track(data, *plots):
     # If the track is finished, set up the next one
     if track.i == -1:
         track.time += timeStep
-        track.x0 = fromTetCoordinates(track.f, track.t, track.y)
-        track.x1 = path.position(track.time) - track.x0
+        if motion is not None:
+            mesh.movePoints(motion.position(track.time, mesh.pointsOldest))
         track.l = 0
+        track.x0 = (fromTetCoordinates if motion is None else fromMovingTetCoordinates)(track.f, track.t, track.y, track.l)
+        track.x1 = path.position(track.time) - track.x0
     # If on a face, change tet and update the plot
     else:
         track.f, track.t, track.y = changeTet(track.f, track.t, track.i, track.y)
-        updateTetPlot(plots[3], track.f, track.t, shrink=1.0)
     # Move through the tet and plot the new position
-    track.y, track.i, track.l = trackThroughTet(track.f, track.t, track.y, track.x1, track.l)
-    track.path.append(fromTetCoordinates(track.f, track.t, track.y))
+    track.y, track.i, track.l = (trackThroughTet if motion is None else trackThroughMovingTet)(track.f, track.t, track.y, track.x1, track.l)
+    track.path.append((fromTetCoordinates if motion is None else fromMovingTetCoordinates)(track.f, track.t, track.y, track.l))
+    track.path = track.path[max(0, len(track.path) - 10):]
+    # Update the plots
+    updatePointsPlot(plots[0], track.l)
+    updateFacesPlot(plots[1], track.l)
+    updateCellsPlot(plots[2], track.l)
     updatePlot(plots[4], np.array(track.path))
-
-    #track.time += timeStep
-    #mesh.movePoints(motion.position(track.time, mesh.pointsOldest))
-    #updatePointsPlot(plots[0])
-    #updateFacesPlot(plots[1])
-    #updateCellsPlot(plots[2])
+    updateTetPlot(plots[3], track.f, track.t, track.l, shrink=1.0)
 
 # Initialise the track
 track.time = 0
@@ -483,12 +548,19 @@ track.path = [path.position(0)]
 track.hit = False
 
 # Initialise the plots
-updatePointsPlot(plots[0])
-updateFacesPlot(plots[1])
-updateCellsPlot(plots[2])
+updatePointsPlot(plots[0], 0)
+updateFacesPlot(plots[1], 0)
+updateCellsPlot(plots[2], 0)
 updatePlot(plots[4], np.array(track.path))
-updateTetPlot(plots[3], track.f, track.t, shrink=1.0)
+updateTetPlot(plots[3], track.f, track.t, 0, shrink=1.0)
 
 # Animate
 animation = an.FuncAnimation(fg, track, fargs=(plots), interval=100)
 pp.show()
+
+## Draw
+#for i in range(15):
+#    track(None, *plots)
+#temp = np.array([track.x0, track.x0 + track.x1])
+#ax.plot(temp[:,0], temp[:,1], temp[:,2], 'kx--')
+#pp.show()
