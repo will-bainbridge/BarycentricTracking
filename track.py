@@ -1,5 +1,26 @@
 #!/usr/bin/python3
 
+#------------------------------------------------------------------------------#
+
+'''
+Copyright (C) 2016 Will Bainbridge
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+'''
+
+#------------------------------------------------------------------------------#
+
 import numpy as np
 import sys
 
@@ -209,13 +230,6 @@ def getMovingTetReverseTransform(f, t, l):
         ])
     return vO, np.array([detA0, detA1, detA2, detA3]), np.array([T0, T1, T2])
 
-#motion = __import__('motion1')
-#print('TET', *getTetReverseTransform(0, 1), sep='\n')
-##mesh.movePoints(motion.position(0.1, mesh.pointsOldest))
-#mesh.movePoints(mesh.pointsOldest + 0.1*np.random.rand(*mesh.points.shape))
-#print('MOVING TET', *getMovingTetReverseTransform(0, 1, 0), sep='\n')
-#exit(1)
-
 def toBarycentricPosition(x):
     assert x.shape == (3, )
     return np.append(1 - np.sum(x), x)
@@ -246,24 +260,11 @@ def fromMovingTetCoordinates(f, t, y, l):
     origin, A = getMovingTetTransform(f, t, l)
     return A[0].dot(fromBarycentricPosition(y)) + origin[0]
 
-    #origin_, A_ = getMovingTetTransform(f, t, l)
-    #origin = origin_[0] + origin_[1]*l
-    #A = A_[0] + A_[1]*l
-    #return A.dot(fromBarycentricPosition(y)) + origin
-
 def toMovingTetCoordinates(f, t, x, l):
     origin, detA, T = getTetMovingTransform(f, t)
     if detA[0] == 0:
         return np.ones(4)*np.nan
     return toBarycentricPosition(T[0].dot(x - origin[0])/detA[0])
-
-    #origin_, detA_, T_ = getTetMovingTransform(f, t)
-    #origin = origin_[0] + origin_[1]*l
-    #detA = detA_[0] + detA_[1]*l + detA_[2]*l**2 + detA_[3]*l**3
-    #T = T_[0] + T_[1]*l + T_[2]*l**2
-    #if detA == 0:
-    #    return np.ones(4)*np.nan
-    #return toBarycentricPosition(T.dot(x - origin)/detA)
 
 def findTet(x):
     for f in range(len(mesh.faces)):
@@ -491,11 +492,10 @@ def trackThroughMovingTet(f, t, y0, x1, l):
     # Remove tolerance issues in the event of a hit
     if iH != -1:
         yH[iH] = 0
-
+    # ...
     print(iH, yH)
     if np.any(0 > yH) or np.any(yH > 1):
         raise NameError('The track is outside the tet')
-
     # Return the hit index, the new position, and the new tracking parameter
     return yH, iH, l + (1 - l)*muH*detA[0]
 
