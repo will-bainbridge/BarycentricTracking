@@ -240,11 +240,13 @@ def toBarycentricDisplacement(x):
 
 def fromBarycentricPosition(x):
     assert x.shape == (4, )
-    return (x/np.sum(x))[1:] # <-- Assumes barycentrics function like homogeneous coordinates.
+    # <-- Assumes barycentrics function like homogeneous coordinates.
+    return (x/np.sum(x))[1:]
 
 #def fromBarycentricDisplacement(x):
 #    assert x.shape == (4, )
-#    return x[1:] # <-- Is this sufficient? How could it be normalised? The sum is zero for a displacement.
+#    # <-- Is this sufficient? How could it be normalised? The sum is zero for a displacement.
+#    return x[1:]
 
 def fromTetCoordinates(f, t, y, l):
     origin, A = getTetTransform(f, t)
@@ -438,9 +440,9 @@ def trackThroughTet(f, t, y0, x1, l):
     iH = -1
     muH = np.finfo(float).max if detA == 0 else np.abs(1/detA)
     for i in range(4):
-        if TX1[i] != 0:
+        if TX1[i] < 0:
             mu = - y0[i]/TX1[i]
-            if 0 < mu and mu < muH:
+            if 0 <= mu and mu < muH:
                 iH = i
                 muH = mu
     # Set the new y
@@ -471,31 +473,37 @@ def trackThroughMovingTet(f, t, y0, x1, l):
         ]).T
     hitPolyO = np.expand_dims(detAPoly - np.sum(hitPolyB12, axis=0), axis=0)
     hitPoly = np.append(hitPolyO, hitPolyB12, axis=0)
+    dHitPoly = hitPoly[:,1:]*np.arange(1, 4)
     # Calculate the hit fraction
     iH = -1
     muH = np.finfo(float).max if detA[0] == 0 else np.abs(1/detA[0])
-    print(muH)
     for i in range(4):
-        muRoots = np.roots(hitPoly[i][::-1]) # <-- Numpy seems to handle quadratic and linear functions fine
-        print(i, muRoots, end=': ')
-        muRoots = np.real(muRoots[np.isreal(muRoots)]) # <-- The np.isreal method won't work when there is a small imaginary error
-        print(muRoots, end=': ')
-        muRoots = muRoots[(0 < muRoots) & (muRoots < muH)]
-        print(muRoots)
+        # <-- This root finding step is likely to have to deal with unpleasant cases
+        #     Cases where the high order coefficients are zero or near-zero are difficult to handle
+        #     Numpy does fine
+        muRoots = np.roots(hitPoly[i][::-1])
+        # <-- This method compares the imaginary part to zero, so this wouldn't work in the event of a small imaginary error
+        #     Numpy doesn't seem to generate such errors, though, so this is OK
+        muRoots = np.real(muRoots[np.isreal(muRoots)])
+        dHitPolyVal = dHitPoly[i][0] + muRoots*dHitPoly[i][1] + muRoots*muRoots*dHitPoly[i][2]
+        muRoots = muRoots[(dHitPolyVal < 0) & (0 <= muRoots) & (muRoots < muH)]
         if muRoots.size:
             iH = i
             muH = np.min(muRoots)
     # Set the new y
     detAPolyVal = detAPoly[0] + muH*detAPoly[1] + muH*muH*detAPoly[2] + muH*muH*muH*detAPoly[3]
     hitPolyVal = hitPoly[:,0] + muH*hitPoly[:,1] + muH*muH*hitPoly[:,2] + muH*muH*muH*hitPoly[:,3]
-    yH = hitPolyVal/detAPolyVal # <-- This calculation will need special handling for cases when both polynomials approach zero
+    # <-- This calculation will need special handling for cases when both polynomials approach zero
+    #     Testing for zero will be accomplished by comparing the values to an estimate of the truncation error
+    #     If both polynomials are zero, the limit will be evaluated by differentiating
+    #     If the denominator is zero, but the numerator is not, an error will result
+    yH = hitPolyVal/detAPolyVal
+    # <-- In the event where both polynomials approach zero, the calculated yH will not be on a face
+    #     A second track step will be required, through the degenerate tet
+    #     This can be of the simpler, static mesh form
     # Remove tolerance issues in the event of a hit
     if iH != -1:
         yH[iH] = 0
-    # ...
-    print(iH, yH)
-    if np.any(0 > yH) or np.any(yH > 1):
-        raise NameError('The track is outside the tet')
     # Return the hit index, the new position, and the new tracking parameter
     return yH, iH, l + (1 - l)*muH*detA[0]
 
@@ -531,6 +539,8 @@ def track(data, *plots):
         track.f, track.t, track.y = changeTet(track.f, track.t, track.i, track.y)
     # Move through the tet and plot the new position
     track.y, track.i, track.l = (trackThroughTet if motion is None else trackThroughMovingTet)(track.f, track.t, track.y, track.x1, track.l)
+    if np.any(0 > track.y) or np.any(track.y > 1):
+        raise NameError('The track is outside the tet')
     track.path.append((fromTetCoordinates if motion is None else fromMovingTetCoordinates)(track.f, track.t, track.y, track.l))
     track.path = track.path[max(0, len(track.path) - 10):]
     # Update the plots
