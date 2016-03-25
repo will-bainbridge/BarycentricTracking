@@ -340,6 +340,78 @@ def updateTetPlot(plot, f, t, l, shrink=0.8, centre=None):
 
 #------------------------------------------------------------------------------#
 
+def polyValue(coeffs, x):
+    return np.sum(coeffs*x**np.arange(0, coeffs.shape[-1]), axis=-1)
+
+def polyRealRoots(coeffs):
+    # <-- This root finding step is likely to have to deal with unpleasant cases
+    #     Cases where the high order coefficients are zero or near-zero are difficult to handle
+    #     Numpy's black box method seems to handle these cases fine
+    # <-- Real roots are identified by comparing the imaginary part to zero
+    #     This wouldn't work in the event of a small imaginary error
+    #     Numpy's black box doesn't seem to generate such errors, though, so this is OK
+    # <-- Numpy's black box root finding is looking pretty good, actually
+    allRoots = np.roots(coeffs[::-1])
+    return np.real(allRoots[np.isreal(allRoots)])
+
+def polyDifferentiate(coeffs):
+    return coeffs[...,1:]*np.arange(1, coeffs.shape[-1])
+
+def polyValueAndError(coeffs, x):
+    '''
+    This evaluates the polynomial, much like the polyValue function. It also
+    returns a error which is a worst-case estimate of the floating-point
+    truncation generated in peforming the evaluation. This is helpful for
+    identifying cases where the polynomial is zero to within the precision of
+    the computer.
+    '''
+    terms = coeffs*x**np.arange(0, coeffs.shape[-1])
+    sums = np.cumsum(terms, axis=-1)
+    value = sums[...,-1]
+    terms = np.abs(terms)
+    sums = np.abs(sums)
+    return value, np.sum(np.maximum(terms[...,:-1], np.maximum(terms[...,1:], sums[...,1:])), axis=-1)*np.spacing(1)
+
+def polyFraction(numerator, denominator, x):
+    '''
+    This function calculates the ratio of two polynomials. It contains logic for
+    cases where one or more sides of the fraction approach zero. The interesting
+    case is when both sides approach zero. In this case, both numerator and
+    denominator are differentiated, and the function recurses.
+    '''
+    numVal, numErr = polyValueAndError(numerator, x)
+    denVal, denErr = polyValueAndError(denominator, x)
+    numIsTiny = np.abs(numVal)*1e-4 < numErr;
+    denIsTiny = np.abs(denVal)*1e-4 < denErr;
+    numIsSmall = np.abs(numVal)*1e-8 < numErr;
+    denIsSmall = np.abs(denVal)*1e-8 < denErr;
+    result = np.zeros(np.broadcast(numVal, denVal).shape)
+    result[numIsTiny & ~denIsTiny] = 0
+    result[~numIsTiny & denIsTiny] = np.inf
+    result[~numIsTiny & ~denIsTiny] = numVal[~numIsTiny]/denVal[~denIsTiny]
+    # <-- Lower tolerance avoids zeros/infinities at the transition between normal and limit cases
+    mask = numIsSmall & denIsSmall
+    limit = np.any(mask)
+    if limit:
+        result[mask] = polyFraction(polyDifferentiate(numerator), polyDifferentiate(denominator), x)[0][mask]
+    return result, limit
+
+#f = np.array([1, 3,-4])
+#g = np.array([1, 5, 2, -8])
+#x = np.linspace(0.9999999, 1.0000001, 1001)
+#y = np.array([ polyValue(f, x_)/polyValue(g, x_) for x_ in x ])
+#z = np.array([ polyFraction(f, g, x_)[0] for x_ in x ])
+
+#import matplotlib.pyplot as pp
+#pp.xlim(np.min(x), np.max(x))
+#pp.ylim(y[-1], y[0])
+#pp.plot(x, y, '-')
+#pp.plot(x, z, '-')
+#pp.show()
+#exit(1)
+
+#------------------------------------------------------------------------------#
+
 def changeCell(f, t, i, y0):
     '''
     Changing cell is quite simple. The tets match on either side of a face, so
@@ -473,34 +545,25 @@ def trackThroughMovingTet(f, t, y0, x1, l):
         ]).T
     hitPolyO = np.expand_dims(detAPoly - np.sum(hitPolyB12, axis=0), axis=0)
     hitPoly = np.append(hitPolyO, hitPolyB12, axis=0)
-    dHitPoly = hitPoly[:,1:]*np.arange(1, 4)
+    dHitPoly = polyDifferentiate(hitPoly)
     # Calculate the hit fraction
     iH = -1
     muH = np.finfo(float).max if detA[0] == 0 else np.abs(1/detA[0])
     for i in range(4):
-        # <-- This root finding step is likely to have to deal with unpleasant cases
-        #     Cases where the high order coefficients are zero or near-zero are difficult to handle
-        #     Numpy does fine
-        muRoots = np.roots(hitPoly[i][::-1])
-        # <-- This method compares the imaginary part to zero, so this wouldn't work in the event of a small imaginary error
-        #     Numpy doesn't seem to generate such errors, though, so this is OK
-        muRoots = np.real(muRoots[np.isreal(muRoots)])
+        muRoots = polyRealRoots(hitPoly[i])
         dHitPolyVal = dHitPoly[i][0] + muRoots*dHitPoly[i][1] + muRoots*muRoots*dHitPoly[i][2]
         muRoots = muRoots[(dHitPolyVal < 0) & (0 <= muRoots) & (muRoots < muH)]
         if muRoots.size:
             iH = i
             muH = np.min(muRoots)
     # Set the new y
-    detAPolyVal = detAPoly[0] + muH*detAPoly[1] + muH*muH*detAPoly[2] + muH*muH*muH*detAPoly[3]
-    hitPolyVal = hitPoly[:,0] + muH*hitPoly[:,1] + muH*muH*hitPoly[:,2] + muH*muH*muH*hitPoly[:,3]
-    # <-- This calculation will need special handling for cases when both polynomials approach zero
-    #     Testing for zero will be accomplished by comparing the values to an estimate of the truncation error
-    #     If both polynomials are zero, the limit will be evaluated by differentiating
-    #     If the denominator is zero, but the numerator is not, an error will result
-    yH = hitPolyVal/detAPolyVal
-    # <-- In the event where both polynomials approach zero, the calculated yH will not be on a face
-    #     A second track step will be required, through the degenerate tet
-    #     This can be of the simpler, static mesh form
+    yH, collapse = polyFraction(hitPoly, detAPoly, muH)
+    # Treat collapsing tet
+    if collapse:
+        # <-- In the event where both polynomials approach zero, the calculated yH will not be on a face
+        #     A second track step will be required, through the degenerate tet
+        #     This can be of the simpler, static mesh form
+        raise NotImplementedError
     # Remove tolerance issues in the event of a hit
     if iH != -1:
         yH[iH] = 0

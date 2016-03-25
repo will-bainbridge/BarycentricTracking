@@ -22,8 +22,8 @@ pointsAtX0 = [
         [ 0,  2, -1]]
 points = (
         pointsAtX0 +
-        translate(pointsAtX0, [2, 0, 0]) +
         translate(pointsAtX0, [4, 0, 0]) +
+        translate(pointsAtX0, [2, 0, 0]) +
         translate(pointsAtX0, [6, 0, 0]))
 
 # Faces
