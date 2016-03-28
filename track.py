@@ -386,11 +386,11 @@ def polyFraction(numerator, denominator, x):
     numIsSmall = np.abs(numVal)*1e-8 < numErr;
     denIsSmall = np.abs(denVal)*1e-8 < denErr;
     result = np.zeros(np.broadcast(numVal, denVal).shape)
-    result[numIsTiny & ~denIsTiny] = 0
-    result[~numIsTiny & denIsTiny] = np.inf
-    result[~numIsTiny & ~denIsTiny] = numVal[~numIsTiny]/denVal[~denIsTiny]
+    result[np.asarray(numIsTiny & ~denIsTiny)] = 0
+    result[np.asarray(~numIsTiny & denIsTiny)] = np.inf
+    result[np.asarray(~numIsTiny & ~denIsTiny)] = numVal[np.asarray(~numIsTiny)]/denVal[np.asarray(~denIsTiny)]
     # <-- Lower tolerance avoids zeros/infinities at the transition between normal and limit cases
-    mask = numIsSmall & denIsSmall
+    mask = np.asarray(numIsSmall & denIsSmall)
     limit = np.any(mask)
     if limit:
         result[mask] = polyFraction(polyDifferentiate(numerator), polyDifferentiate(denominator), x)[0][mask]
