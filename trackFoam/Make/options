@@ -1,0 +1,15 @@
+EXE_INC = \
+    -DFULLDEBUG -g -O0 \
+    /*-DDyM*/ \
+    -I$(LIB_SRC)/finiteVolume/lnInclude \
+    -I$(LIB_SRC)/dynamicFvMesh/lnInclude \
+    -I$(LIB_SRC)/meshTools/lnInclude \
+    -I$(LIB_SRC)/sampling/lnInclude \
+    -I$(LIB_SRC)/lagrangian/basic/lnInclude
+
+EXE_LIBS = \
+    -lfiniteVolume \
+    -ldynamicFvMesh \
+    -lmeshTools \
+    -lsampling \
+    -llagrangian
