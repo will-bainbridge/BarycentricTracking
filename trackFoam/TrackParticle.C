@@ -27,7 +27,7 @@ License
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-template <class ParticleType>
+template<class ParticleType>
 Foam::TrackParticle<ParticleType>::TrackParticle
 (
     const polyMesh& mesh,
@@ -38,12 +38,12 @@ Foam::TrackParticle<ParticleType>::TrackParticle
     const vector& U
 )
 :
-    particle(mesh, position, celli, tetFacei, tetPtI),
+    ParticleType(mesh, position, celli, tetFacei, tetPtI),
     U_(U)
 {}
 
 
-template <class ParticleType>
+template<class ParticleType>
 Foam::TrackParticle<ParticleType>::TrackParticle
 (
     const polyMesh& mesh,
@@ -51,7 +51,7 @@ Foam::TrackParticle<ParticleType>::TrackParticle
     bool readFields
 )
 :
-    particle(mesh, is, readFields)
+    ParticleType(mesh, is, readFields)
 {
     if (readFields)
     {
@@ -76,7 +76,7 @@ Foam::TrackParticle<ParticleType>::TrackParticle
 
 // * * * * * * * * * * * * * * * IOstream Operators  * * * * * * * * * * * * //
 
-template <class ParticleType>
+template<class ParticleType>
 Foam::Ostream& Foam::operator<<
 (
     Ostream& os,
@@ -85,11 +85,11 @@ Foam::Ostream& Foam::operator<<
 {
     if (os.format() == IOstream::ASCII)
     {
-        os  << static_cast<const particle&>(p) << token::SPACE << p.U_;
+        os  << static_cast<const ParticleType&>(p) << token::SPACE << p.U_;
     }
     else
     {
-        os  << static_cast<const particle&>(p);
+        os  << static_cast<const ParticleType&>(p);
         os.write(reinterpret_cast<const char*>(&p.U_));
     }
 

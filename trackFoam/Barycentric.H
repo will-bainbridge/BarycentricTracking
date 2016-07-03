@@ -34,7 +34,8 @@ SourceFiles
 #ifndef Barycentric_H
 #define Barycentric_H
 
-#include "VectorSpace.H"
+#include "Tensor.H"
+#include "Vector.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 

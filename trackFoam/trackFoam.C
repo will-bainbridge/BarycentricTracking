@@ -29,17 +29,17 @@ Description
 \*---------------------------------------------------------------------------*/
 
 #include "argList.H"
+#include "Barycentric.H"
+#include "barycentricParticle.H"
 #include "Cloud.H"
 #include "dynamicFvMesh.H"
 #include "TrackParticle.H"
-
-#include "Barycentric.H"
 
 using namespace Foam;
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-typedef TrackParticle<particle> trackParticle; // <-- drop replacement for particle in here
+typedef TrackParticle<barycentricParticle> trackParticle; // <-- drop replacement for particle in here
 
 defineTemplateTypeNameAndDebug(trackParticle, 0);
 defineTemplateTypeNameAndDebug(Cloud<trackParticle>, 0);

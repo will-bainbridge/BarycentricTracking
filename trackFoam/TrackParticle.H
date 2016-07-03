@@ -33,9 +33,7 @@ SourceFiles
 #ifndef TrackParticle_H
 #define TrackParticle_H
 
-#include "particle.H"
-#include "autoPtr.H"
-#include "IOstreams.H"
+#include "polyMeshTetDecomposition.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -44,18 +42,21 @@ namespace Foam
 
 // Forward declaration of friend functions and operators
 
-template <class ParticleType>
+template<class ParticleType>
 class TrackParticle;
 
-template <class ParticleType>
+template<class ParticleType>
 Ostream& operator<<(Ostream&, const TrackParticle<ParticleType>&);
 
+class symmetryPlanePolyPatch;
+class symmetryPolyPatch;
+class wedgePolyPatch;
 
 /*---------------------------------------------------------------------------*\
                      Class TrackParticle Declaration
 \*---------------------------------------------------------------------------*/
 
-template <class ParticleType>
+template<class ParticleType>
 class TrackParticle
 :
     public ParticleType
@@ -69,7 +70,7 @@ class TrackParticle
 public:
 
     //- Class used to pass tracking data to the trackToFace function
-    template <class CloudType>
+    template<class CloudType>
     class TrackingData
     :
         public ParticleType::template TrackingData<CloudType>
@@ -115,9 +116,12 @@ public:
         );
 
         //- Construct and return a clone
-        autoPtr<particle> clone() const
+        autoPtr<ParticleType> clone() const
         {
-            return autoPtr<particle>(new TrackParticle<ParticleType>(*this));
+            return autoPtr<ParticleType>
+            (
+                new TrackParticle<ParticleType>(*this)
+            );
         }
 
         //- Factory class to read-construct particles used for
@@ -161,12 +165,12 @@ public:
         // Tracking
 
             //- Track all particles for the given amount of time
-            template <class TrackData>
+            template<class TrackData>
             bool move(TrackData& td, const scalar trackTime);
 
             //- Overridable function to handle the particle hitting a patch
             //  Executed before other patch-hitting functions
-            template <class TrackData>
+            template<class TrackData>
             bool hitPatch
             (
                 const polyPatch&,
@@ -177,7 +181,7 @@ public:
             );
 
             //- Overridable function to handle the particle hitting a wedge
-            template <class TrackData>
+            template<class TrackData>
             void hitWedgePatch
             (
                 const wedgePolyPatch&,
@@ -186,7 +190,7 @@ public:
 
             //- Overridable function to handle the particle hitting a
             //  symmetry plane
-            template <class TrackData>
+            template<class TrackData>
             void hitSymmetryPlanePatch
             (
                 const symmetryPlanePolyPatch&,
@@ -195,7 +199,7 @@ public:
 
             //- Overridable function to handle the particle hitting a
             //  symmetry patch
-            template <class TrackData>
+            template<class TrackData>
             void hitSymmetryPatch
             (
                 const symmetryPolyPatch&,
@@ -203,7 +207,7 @@ public:
             );
 
             //- Overridable function to handle the particle hitting a cyclic
-            template <class TrackData>
+            template<class TrackData>
             void hitCyclicPatch
             (
                 const cyclicPolyPatch&,
@@ -212,7 +216,7 @@ public:
 
             //- Overridable function to handle the particle hitting a
             //- processorPatch
-            template <class TrackData>
+            template<class TrackData>
             void hitProcessorPatch
             (
                 const processorPolyPatch&,
@@ -220,7 +224,7 @@ public:
             );
 
             //- Overridable function to handle the particle hitting a wallPatch
-            template <class TrackData>
+            template<class TrackData>
             void hitWallPatch
             (
                 const wallPolyPatch&,
@@ -229,7 +233,7 @@ public:
             );
 
             //- Overridable function to handle the particle hitting a polyPatch
-            template <class TrackData>
+            template<class TrackData>
             void hitPatch
             (
                 const polyPatch&,
@@ -238,7 +242,7 @@ public:
 
             //- Convert processor patch addressing to the global equivalents
             //  and set the celli to the face-neighbour
-            template <class TrackData>
+            template<class TrackData>
             void correctAfterParallelTransfer(const label, TrackData&);
 
 

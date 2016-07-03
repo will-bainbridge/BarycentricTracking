@@ -27,7 +27,7 @@ License
 
 // * * * * * * * * * * * * * Static Member Functions * * * * * * * * * * * * //
 
-template <class ParticleType>
+template<class ParticleType>
 template<class CloudType>
 void Foam::TrackParticle<ParticleType>::readFields(CloudType& c)
 {
@@ -36,7 +36,7 @@ void Foam::TrackParticle<ParticleType>::readFields(CloudType& c)
         return;
     }
 
-    particle::readFields(c);
+    ParticleType::readFields(c);
 
     IOField<vector> U(c.fieldIOobject("U", IOobject::MUST_READ));
     c.checkFieldIOobject(c, U);
@@ -54,11 +54,11 @@ void Foam::TrackParticle<ParticleType>::readFields(CloudType& c)
 }
 
 
-template <class ParticleType>
+template<class ParticleType>
 template<class CloudType>
 void Foam::TrackParticle<ParticleType>::writeFields(const CloudType& c)
 {
-    particle::writeFields(c);
+    ParticleType::writeFields(c);
 
     label np = c.size();
 
@@ -81,8 +81,8 @@ void Foam::TrackParticle<ParticleType>::writeFields(const CloudType& c)
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
-template <class ParticleType>
-template <class TrackData>
+template<class ParticleType>
+template<class TrackData>
 bool Foam::TrackParticle<ParticleType>::move
 (
     TrackData& td,
@@ -123,8 +123,8 @@ bool Foam::TrackParticle<ParticleType>::move
 }
 
 
-template <class ParticleType>
-template <class TrackData>
+template<class ParticleType>
+template<class TrackData>
 bool Foam::TrackParticle<ParticleType>::hitPatch
 (
     const polyPatch&,
@@ -138,8 +138,8 @@ bool Foam::TrackParticle<ParticleType>::hitPatch
 }
 
 
-template <class ParticleType>
-template <class TrackData>
+template<class ParticleType>
+template<class TrackData>
 void Foam::TrackParticle<ParticleType>::hitWedgePatch
 (
     const wedgePolyPatch&,
@@ -150,8 +150,8 @@ void Foam::TrackParticle<ParticleType>::hitWedgePatch
 }
 
 
-template <class ParticleType>
-template <class TrackData>
+template<class ParticleType>
+template<class TrackData>
 void Foam::TrackParticle<ParticleType>::hitSymmetryPlanePatch
 (
     const symmetryPlanePolyPatch&,
@@ -162,8 +162,8 @@ void Foam::TrackParticle<ParticleType>::hitSymmetryPlanePatch
 }
 
 
-template <class ParticleType>
-template <class TrackData>
+template<class ParticleType>
+template<class TrackData>
 void Foam::TrackParticle<ParticleType>::hitSymmetryPatch
 (
     const symmetryPolyPatch&,
@@ -174,8 +174,8 @@ void Foam::TrackParticle<ParticleType>::hitSymmetryPatch
 }
 
 
-template <class ParticleType>
-template <class TrackData>
+template<class ParticleType>
+template<class TrackData>
 void Foam::TrackParticle<ParticleType>::hitCyclicPatch
 (
     const cyclicPolyPatch&,
@@ -186,8 +186,8 @@ void Foam::TrackParticle<ParticleType>::hitCyclicPatch
 }
 
 
-template <class ParticleType>
-template <class TrackData>
+template<class ParticleType>
+template<class TrackData>
 void Foam::TrackParticle<ParticleType>::hitProcessorPatch
 (
     const processorPolyPatch&,
@@ -198,8 +198,8 @@ void Foam::TrackParticle<ParticleType>::hitProcessorPatch
 }
 
 
-template <class ParticleType>
-template <class TrackData>
+template<class ParticleType>
+template<class TrackData>
 void Foam::TrackParticle<ParticleType>::hitWallPatch
 (
     const wallPolyPatch& wpp,
@@ -211,8 +211,8 @@ void Foam::TrackParticle<ParticleType>::hitWallPatch
 }
 
 
-template <class ParticleType>
-template <class TrackData>
+template<class ParticleType>
+template<class TrackData>
 void Foam::TrackParticle<ParticleType>::hitPatch
 (
     const polyPatch& wpp,
@@ -223,15 +223,15 @@ void Foam::TrackParticle<ParticleType>::hitPatch
 }
 
 
-template <class ParticleType>
-template <class TrackData>
+template<class ParticleType>
+template<class TrackData>
 void Foam::TrackParticle<ParticleType>::correctAfterParallelTransfer
 (
     const label patchi,
     TrackData& td
 )
 {
-    particle::correctAfterParallelTransfer(patchi, td);
+    ParticleType::correctAfterParallelTransfer(patchi, td);
 }
 
 

@@ -1,3 +1,5 @@
 trackFoam.C
+barycentricParticle.C
+barycentricParticleIO.C
 
 EXE = $(FOAM_USER_APPBIN)/trackFoam
