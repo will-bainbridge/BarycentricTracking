@@ -33,6 +33,8 @@ Description
 #include "dynamicFvMesh.H"
 #include "TrackParticle.H"
 
+#include "Barycentric.H"
+
 using namespace Foam;
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
@@ -73,7 +75,7 @@ int main(int argc, char *argv[])
             mesh.checkMesh(true);
         #endif
 
-        trackParticle::TrackingData<Cloud<trackParticle> > trackingData(cloud);
+        trackParticle::TrackingData<Cloud<trackParticle>> trackingData(cloud);
 
         cloud.move(trackingData, runTime.deltaTValue());
 

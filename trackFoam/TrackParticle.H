@@ -133,9 +133,9 @@ public:
                 mesh_(mesh)
             {}
 
-            autoPtr<TrackParticle<ParticleType> > operator()(Istream& is) const
+            autoPtr<TrackParticle<ParticleType>> operator()(Istream& is) const
             {
-                return autoPtr<TrackParticle<ParticleType> >
+                return autoPtr<TrackParticle<ParticleType>>
                 (
                     new TrackParticle<ParticleType>(mesh_, is, true)
                 );
