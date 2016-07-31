@@ -66,6 +66,31 @@ int main(int argc, char *argv[])
 
     trackParticle::readFields(cloud);
 
+    //-----------------------------------------------------------------------//
+    for (auto iter = cloud.begin(); iter != cloud.end(); ++ iter)
+    {
+        vector centre, base, vertex1, vertex2;
+        iter().tetGeometry(centre, base, vertex1, vertex2);
+        Info<< " Geometry: " << centre << " " << base << " " << vertex1 << " " << vertex2 << endl;
+
+        tensor A;
+        iter().tetTransform(centre, A);
+        Info<< "Transform: " << centre << " " << A << endl;
+
+        scalar detA;
+        tensor T;
+        iter().tetReverseTransform(centre, detA, T);
+        Info<< "  Reverse: " << centre << " " << detA << " " << T << endl;
+
+        const vector x = iter().position();
+        const Barycentric<scalar> y = toBarycentric(T/detA, centre, x);
+
+        Info<< "        x: " << x << endl
+            << "        y: " << y << endl
+            << "        x: " << fromBarycentric(A, centre, y) << endl;
+    }
+    //-----------------------------------------------------------------------//
+
     while (runTime.loop())
     {
         Info<< "Time = " << runTime.timeName() << endl;

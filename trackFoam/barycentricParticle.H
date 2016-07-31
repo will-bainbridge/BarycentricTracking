@@ -165,10 +165,101 @@ protected:
         label origId_;
 
 
+public: // private: // <-- !!! Make private
+
     // Private Member Functions
 
-        //- ...
+        // Tetrahedra functions
 
+            //- Get indices into the current face for the face-bound vertices of
+            //  the current tet.
+            void tetFaceIndices
+            (
+                label& baseI,
+                label& vertex1I,
+                label& vertex2I
+            ) const;
+
+            //- Get indices into the mesh points for the face-bound vertices of
+            //  the current tet.
+            void tetMeshIndices
+            (
+                label& baseI,
+                label& vertex1I,
+                label& vertex2I
+            ) const;
+
+            //- Get the vertices of the current tet
+            void tetGeometry
+            (
+                vector& centre,
+                vector& base,
+                vector& vertex1,
+                vector& vertex2
+            ) const;
+
+            //- Get the transformation associated with the current tet. This
+            //  will convert a barycentric position within the tet to a
+            //  cartesian position in the global coordinate system. The
+            //  conversion is x = centre + A&y, where x is the cartesian
+            //  position, y is the barycentric position, centre is the origin,
+            //  and A is the transformation tensor.
+            void tetTransform
+            (
+                vector& centre,
+                tensor& A
+            ) const;
+
+            //- Get the reverse transform associated with the current tet. The
+            //  conversion is detA*y = T&(x - centre). The variables x, y and
+            //  centre have the same meaning as for the forward transform. T is
+            //  the inverse of the forward transform tensor, A, multiplied by
+            //  its determinant, detA. This separation allows the barycentric
+            //  tracking algorithm to function on inverted or degenerate
+            //  tetrahedra.
+            void tetReverseTransform
+            (
+                vector& centre,
+                scalar& detA,
+                tensor& T
+            ) const;
+
+            //- Get the vertices of the current moving tet. Two values are
+            //  returned for each vertex. The first is a constant, and the
+            //  second is a linear coefficient of the track fraction.
+            void movingTetGeometry
+            (
+                Pair<vector>& centre,
+                Pair<vector>& base,
+                Pair<vector>& vertex1,
+                Pair<vector>& vertex2
+            ) const;
+
+            //- Get the transformation associated with the current, moving, tet.
+            //  This is of the same form as for the static case. As with the
+            //  moving geometry, a linear function of the tracking fraction is
+            //  returned for each component.
+            void movingTetTransform
+            (
+                Pair<vector>& centre,
+                Pair<tensor>& A
+            ) const;
+
+            //- Get the reverse transformation associated with the current,
+            //  moving, tet. This is of the same form as for the static case. As
+            //  with the moving geometry, a function of the tracking fraction is
+            //  returned for each component. The functions are higher order than
+            //  for the forward transform; the determinant is cubic, and the
+            //  tensor is quadratic.
+            void movingTetReverseTransform
+            (
+                Pair<vector>& centre,
+                FixedList<scalar, 4>& detA,
+                FixedList<tensor, 3>& T
+            ) const;
+
+
+protected:
 
     // Patch interactions
 

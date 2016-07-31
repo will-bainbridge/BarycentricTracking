@@ -116,6 +116,141 @@ Foam::barycentricParticle::barycentricParticle
 {}
 
 
+// * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
+
+void Foam::barycentricParticle::tetFaceIndices
+(
+    label& baseI,
+    label& vertex1I,
+    label& vertex2I
+) const
+{
+    const Foam::face& f = mesh_.faces()[tetFacei_];
+
+    baseI = max(0, mesh_.tetBasePtIs()[tetFacei_]);
+
+    vertex1I = (baseI + tetPtI_) % f.size();
+
+    vertex2I = f.fcIndex(vertex1I);
+
+    if (mesh_.faceOwner()[tetFacei_] != celli_)
+    {
+        Swap(vertex1I, vertex2I);
+    }
+}
+
+
+void Foam::barycentricParticle::tetMeshIndices
+(
+    label& basei,
+    label& vertex1i,
+    label& vertex2i
+) const
+{
+    const Foam::face& f = mesh_.faces()[tetFacei_];
+
+    tetFaceIndices(basei, vertex1i, vertex2i);
+
+    basei = f[basei];
+    vertex1i = f[vertex1i];
+    vertex2i = f[vertex2i];
+}
+
+
+void Foam::barycentricParticle::tetGeometry
+(
+    vector& centre,
+    vector& base,
+    vector& vertex1,
+    vector& vertex2
+) const
+{
+    label basei, vertex1i, vertex2i;
+    tetMeshIndices(basei, vertex1i, vertex2i);
+
+    centre = mesh_.cellCentres()[celli_];
+    base = mesh_.points()[basei];
+    vertex1 = mesh_.points()[vertex1i];
+    vertex2 = mesh_.points()[vertex2i];
+}
+
+
+void Foam::barycentricParticle::tetTransform
+(
+    vector& centre,
+    tensor& A
+) const
+{
+    vector base, vertex1, vertex2;
+    tetGeometry(centre, base, vertex1, vertex2);
+
+    A = tensor
+    (
+        base - centre,
+        vertex1 - centre,
+        vertex2 - centre
+    ).T();
+}
+
+
+void Foam::barycentricParticle::tetReverseTransform
+(
+    vector& centre,
+    scalar& detA,
+    tensor& T
+) const
+{
+    tensor A;
+    tetTransform(centre, A);
+
+    // <-- This transpose happens twice. It could be optimised out, but the
+    //     compiler might be removing it anyway...
+    A = A.T();
+
+    detA = A.x() & (A.y() ^ A.z());
+
+    T = tensor
+    (
+        A.y() ^ A.z(),
+        A.z() ^ A.x(),
+        A.x() ^ A.y()
+    );
+}
+
+
+void Foam::barycentricParticle::movingTetGeometry
+(
+    Pair<vector>& centre,
+    Pair<vector>& base,
+    Pair<vector>& vertex1,
+    Pair<vector>& vertex2
+) const
+{
+    NotImplemented;
+}
+
+
+void Foam::barycentricParticle::movingTetTransform
+(
+    Pair<vector>& centre,
+    Pair<tensor>& A
+) const
+{
+    NotImplemented;
+}
+
+
+void Foam::barycentricParticle::movingTetReverseTransform
+(
+    Pair<vector>& centre,
+    FixedList<scalar, 4>& detA,
+    FixedList<tensor, 3>& A
+) const
+{
+    NotImplemented;
+}
+
+
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
 void Foam::barycentricParticle::transformProperties(const tensor&)
