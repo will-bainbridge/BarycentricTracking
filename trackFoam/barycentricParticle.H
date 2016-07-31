@@ -167,71 +167,7 @@ protected:
 
     // Private Member Functions
 
-        //- Find the tet tri faces between position and tet centre
-        void findTris
-        (
-            const vector& position,
-            DynamicList<label>& faceList,
-            const tetPointRef& tet,
-            const FixedList<vector, 4>& tetAreas,
-            const FixedList<label, 4>& tetPlaneBasePtIs,
-            const scalar tol
-        ) const;
-
-        //- Find the lambda value for the line to-from across the
-        //  given tri face, where p = from + lambda*(to - from)
-        inline scalar tetLambda
-        (
-            const vector& from,
-            const vector& to,
-            const label triI,
-            const vector& tetArea,
-            const label tetPlaneBasePtI,
-            const label celli,
-            const label tetFacei,
-            const label tetPtI,
-            const scalar tol
-        ) const;
-
-        //- Find the lambda value for a moving tri face
-        inline scalar movingTetLambda
-        (
-            const vector& from,
-            const vector& to,
-            const label triI,
-            const vector& tetArea,
-            const label tetPlaneBasePtI,
-            const label celli,
-            const label tetFacei,
-            const label tetPtI,
-            const scalar tol
-        ) const;
-
-        //- Modify the tet owner data by crossing triI
-        inline void tetNeighbour(label triI);
-
-        //- Cross the from the given face across the given edge of the
-        //  given cell to find the resulting face and tetPtI
-        inline void crossEdgeConnectedFace
-        (
-            const label& celli,
-            label& tetFacei,
-            label& tetPtI,
-            const edge& e
-        );
-
-        //- Hit wall faces in the current cell if the
-        //- wallImpactDistance is non-zero.  They may not be in
-        //- Different tets to the current.
-        template<class CloudType>
-        inline void hitWallFaces
-        (
-            const CloudType& td,
-            const vector& from,
-            const vector& to,
-            scalar& lambdaMin,
-            tetIndices& closestTetIs
-        );
+        //- ...
 
 
     // Patch interactions
@@ -321,17 +257,6 @@ public:
 
         //- Cumulative particle counter - used to provode unique ID
         static label particleCount_;
-
-        //- Fraction of distance to tet centre to move a particle to
-        // 'rescue' it from a tracking problem
-        static const scalar trackingCorrectionTol;
-
-        //- Fraction of the cell volume to use in determining tolerance values
-        //  for the denominator and numerator of lambda
-        static const scalar lambdaDistanceToleranceCoeff;
-
-        //- Minimum stepFraction tolerance
-        static const scalar minStepFractionTol;
 
 
     // Constructors

@@ -30,13 +30,6 @@ License
 
 Foam::label Foam::barycentricParticle::particleCount_ = 0;
 
-const Foam::scalar Foam::barycentricParticle::trackingCorrectionTol = 1e-5;
-
-const Foam::scalar Foam::barycentricParticle::lambdaDistanceToleranceCoeff =
-    1e3*SMALL;
-
-const Foam::scalar Foam::barycentricParticle::minStepFractionTol = 1e5*SMALL;
-
 namespace Foam
 {
     defineTypeNameAndDebug(barycentricParticle, 0);
