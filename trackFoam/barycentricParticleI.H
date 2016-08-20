@@ -51,16 +51,17 @@ inline const Foam::polyMesh& Foam::barycentricParticle::mesh() const
     return mesh_;
 }
 
-
-inline const Foam::vector& Foam::barycentricParticle::position() const
+inline const Foam::Barycentric<Foam::scalar>&
+Foam::barycentricParticle::barycentric() const
 {
-    return position_;
+    return barycentric_;
 }
 
 
-inline Foam::vector& Foam::barycentricParticle::position()
+inline Foam::Barycentric<Foam::scalar>&
+Foam::barycentricParticle::barycentric()
 {
-    return position_;
+    return barycentric_;
 }
 
 
@@ -140,20 +141,31 @@ inline void Foam::barycentricParticle::initCellFacePt()
 {
     if (celli_ != -1)
     {
-        mesh_.findTetFacePt(celli_, position_, tetFacei_, tetPtI_);
+        mesh_.findTetFacePt(celli_, position(), tetFacei_, tetPtI_);
     }
 
     if (celli_ == -1 || tetFacei_ == -1 || tetPtI_ == -1)
     {
-        mesh_.findCellFacePt(position_, celli_, tetFacei_, tetPtI_);
+        mesh_.findCellFacePt(position(), celli_, tetFacei_, tetPtI_);
 
         if (celli_ == -1)
         {
             FatalErrorInFunction
                 << "cell, tetFace and tetPt search failure at position "
-                << position_ << abort(FatalError);
+                << position() << abort(FatalError);
         }
     }
+}
+
+
+inline bool Foam::barycentricParticle::hasCellFacePt() const
+{
+    // This is a bit of a mess. The particle class is very fundamentally built
+    // around the concept of staged construction. After construction, the
+    // tetrahedra may be uninitialised. Therefore we have to consider the stored
+    // coordinates as cartesian up until the point at which the tet is fully
+    // specified. This function provides that logic.
+    return celli_ != -1 && tetFacei_ != -1 && tetPtI_ != -1;
 }
 
 

@@ -71,7 +71,11 @@ public:
 
     // Constructors
 
-        using VectorSpace<Barycentric<Cmpt>, Cmpt, 4>::VectorSpace;
+        //- Construct null
+        inline Barycentric();
+
+        //- Construct initialized to zero
+        inline Barycentric(const Foam::zero);
 
         //- Construct given four components
         inline Barycentric

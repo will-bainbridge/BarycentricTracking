@@ -48,7 +48,7 @@ Foam::barycentricParticle::barycentricParticle
 )
 :
     mesh_(mesh),
-    position_(position),
+    barycentric_(),
     celli_(celli),
     facei_(-1),
     stepFraction_(0.0),
@@ -56,7 +56,9 @@ Foam::barycentricParticle::barycentricParticle
     tetPtI_(tetPtI),
     origProc_(Pstream::myProcNo()),
     origId_(getNewParticleID())
-{}
+{
+    this->position(position);
+}
 
 
 Foam::barycentricParticle::barycentricParticle
@@ -68,7 +70,7 @@ Foam::barycentricParticle::barycentricParticle
 )
 :
     mesh_(mesh),
-    position_(position),
+    barycentric_(),
     celli_(celli),
     facei_(-1),
     stepFraction_(0.0),
@@ -81,13 +83,14 @@ Foam::barycentricParticle::barycentricParticle
     {
         initCellFacePt();
     }
+    this->position(position);
 }
 
 
 Foam::barycentricParticle::barycentricParticle(const barycentricParticle& p)
 :
     mesh_(p.mesh_),
-    position_(p.position_),
+    barycentric_(p.barycentric_),
     celli_(p.celli_),
     facei_(p.facei_),
     stepFraction_(p.stepFraction_),
@@ -105,7 +108,7 @@ Foam::barycentricParticle::barycentricParticle
 )
 :
     mesh_(mesh),
-    position_(p.position_),
+    barycentric_(p.barycentric_),
     celli_(p.celli_),
     facei_(p.facei_),
     stepFraction_(p.stepFraction_),
@@ -118,6 +121,27 @@ Foam::barycentricParticle::barycentricParticle
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
+Foam::vector Foam::barycentricParticle::position() const
+{
+    vector centre;
+    tensor A;
+    tetTransform(centre, A);
+
+    return fromBarycentric(A, centre, barycentric());
+}
+
+
+void Foam::barycentricParticle::position(const vector& position)
+{
+    vector centre;
+    scalar detA;
+    tensor T;
+    tetReverseTransform(centre, detA, T);
+
+    barycentric() = toBarycentric(T/detA, centre, position);
+}
+
+
 void Foam::barycentricParticle::tetFaceIndices
 (
     label& baseI,
@@ -125,6 +149,14 @@ void Foam::barycentricParticle::tetFaceIndices
     label& vertex2I
 ) const
 {
+    if (!hasCellFacePt())
+    {
+        FatalErrorInFunction
+            << "Tet face indices were requested for a particle before the "
+            << "tetrahedron was initialised."
+            << exit(FatalError);
+    }
+
     const Foam::face& f = mesh_.faces()[tetFacei_];
 
     baseI = max(0, mesh_.tetBasePtIs()[tetFacei_]);
@@ -147,6 +179,14 @@ void Foam::barycentricParticle::tetMeshIndices
     label& vertex2i
 ) const
 {
+    if (!hasCellFacePt())
+    {
+        FatalErrorInFunction
+            << "Tet mesh indices were requested for a particle before the "
+            << "tetrahedron was initialised."
+            << exit(FatalError);
+    }
+
     const Foam::face& f = mesh_.faces()[tetFacei_];
 
     tetFaceIndices(basei, vertex1i, vertex2i);
@@ -165,13 +205,23 @@ void Foam::barycentricParticle::tetGeometry
     vector& vertex2
 ) const
 {
-    label basei, vertex1i, vertex2i;
-    tetMeshIndices(basei, vertex1i, vertex2i);
+    if (!hasCellFacePt())
+    {
+        centre = vector::zero;
+        base = vector(1, 0, 0);
+        vertex1 = vector(0, 1, 0);
+        vertex2 = vector(0, 0, 1);
+    }
+    else
+    {
+        label basei, vertex1i, vertex2i;
+        tetMeshIndices(basei, vertex1i, vertex2i);
 
-    centre = mesh_.cellCentres()[celli_];
-    base = mesh_.points()[basei];
-    vertex1 = mesh_.points()[vertex1i];
-    vertex2 = mesh_.points()[vertex2i];
+        centre = mesh_.cellCentres()[celli_];
+        base = mesh_.points()[basei];
+        vertex1 = mesh_.points()[vertex1i];
+        vertex2 = mesh_.points()[vertex2i];
+    }
 }
 
 

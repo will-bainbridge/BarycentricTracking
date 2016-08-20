@@ -61,7 +61,7 @@ void Foam::barycentricParticle::correctAfterParallelTransfer
     celli_ = ppp.faceCells()[facei_];
 
     // Have patch transform the position
-    ppp.transformPosition(position_, facei_);
+    //ppp.transformPosition(position_, facei_); // <-- !!!
 
     // Transform the properties
     if (!ppp.parallel())
@@ -217,6 +217,19 @@ Foam::scalar Foam::barycentricParticle::trackToFace
 
 
 template<class TrackData>
+Foam::scalar Foam::barycentricParticle::trackToTri
+(
+    const vector& endPosition,
+    TrackData& td
+)
+{
+    NotImplemented;
+
+    return 0.0;
+}
+
+
+template<class TrackData>
 void Foam::barycentricParticle::hitFace(TrackData&)
 {}
 
@@ -303,7 +316,7 @@ void Foam::barycentricParticle::hitCyclicPatch
     // Now the particle is on the receiving side
 
     // Have patch transform the position
-    receiveCpp.transformPosition(position_, patchFacei);
+    //receiveCpp.transformPosition(position_, patchFacei); // <-- !!!
 
     // Transform the properties
     if (!receiveCpp.parallel())
@@ -343,14 +356,14 @@ void Foam::barycentricParticle::hitCyclicAMIPatch
     label patchFacei = facei_ - cpp.start();
 
     // Patch face index on receiving side - also updates position
-    patchFacei = cpp.pointFace(patchFacei, direction, position_);
+    //patchFacei = cpp.pointFace(patchFacei, direction, position_); // <-- !!!
 
     if (patchFacei < 0)
     {
         FatalErrorInFunction
             << "Particle lost across " << cyclicAMIPolyPatch::typeName
             << " patches " << cpp.name() << " and " << receiveCpp.name()
-            << " at position " << position_ << abort(FatalError);
+            << " at position " << position() << abort(FatalError);
     }
 
     // Convert face index into global numbering

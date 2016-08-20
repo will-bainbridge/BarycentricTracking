@@ -33,6 +33,7 @@ Description
 #define barycentricParticle_H
 
 #include "vector.H"
+#include "Barycentric.H"
 #include "Cloud.H"
 #include "IDLList.H"
 #include "pointField.H"
@@ -137,8 +138,8 @@ protected:
         //- Reference to the polyMesh database
         const polyMesh& mesh_;
 
-        //- Position of particle
-        vector position_;
+        //- Barycentric coordinates of the particle within the current tet
+        Barycentric<scalar> barycentric_;
 
         //- Index of the cell it is in
         label celli_;
@@ -168,6 +169,15 @@ protected:
 public: // private: // <-- !!! Make private
 
     // Private Member Functions
+
+        //- Position as a noun. Calculate and return the cartesian position from
+        //  the current barycentric coordinates.
+        vector position() const;
+
+        //- Position as a verb. Set the current barycentric coordinates from the
+        //  given cartesian position.
+        void position(const vector& x);
+
 
         // Tetrahedra functions
 
@@ -437,11 +447,11 @@ public:
             //- Return the mesh database
             inline const polyMesh& mesh() const;
 
-            //- Return current particle position
-            inline const vector& position() const;
+            //- Return current particle barycentric coordinates
+            inline const Barycentric<scalar>& barycentric() const;
 
-            //- Return current particle position
-            inline vector& position();
+            //- Return current particle barycentric coordinates
+            inline Barycentric<scalar>& barycentric();
 
             //- Return current cell particle is in
             inline label& cell();
@@ -496,6 +506,9 @@ public:
             //- Check the stored cell value (setting if necessary) and
             //  initialise the tetFace and tetPt values
             inline void initCellFacePt();
+
+            //- Have the cell, face, tet points been initialised?
+            inline bool hasCellFacePt() const;
 
             //- Is the particle on the boundary/(or outside the domain)?
             inline bool onBoundary() const;
@@ -555,6 +568,10 @@ public:
             //  time-step at which the tracking starts.
             template<class TrackData>
             scalar trackToFace(const vector& endPosition, TrackData& td);
+
+            //- ...
+            template<class TrackData>
+            scalar trackToTri(const vector& endPosition, TrackData& td);
 
             //- Return the index of the face to be used in the interpolation
             //  routine
