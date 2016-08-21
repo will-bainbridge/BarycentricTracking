@@ -139,22 +139,26 @@ inline Foam::label& Foam::barycentricParticle::face()
 
 inline void Foam::barycentricParticle::initCellFacePt()
 {
+    const vector oldPosition(position());
+
     if (celli_ != -1)
     {
-        mesh_.findTetFacePt(celli_, position(), tetFacei_, tetPtI_);
+        mesh_.findTetFacePt(celli_, oldPosition, tetFacei_, tetPtI_);
     }
 
     if (celli_ == -1 || tetFacei_ == -1 || tetPtI_ == -1)
     {
-        mesh_.findCellFacePt(position(), celli_, tetFacei_, tetPtI_);
+        mesh_.findCellFacePt(oldPosition, celli_, tetFacei_, tetPtI_);
 
         if (celli_ == -1)
         {
             FatalErrorInFunction
                 << "cell, tetFace and tetPt search failure at position "
-                << position() << abort(FatalError);
+                << oldPosition << abort(FatalError);
         }
     }
+
+    position(oldPosition);
 }
 
 

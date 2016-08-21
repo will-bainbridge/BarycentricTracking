@@ -113,6 +113,10 @@ public:
             //- Flag to indicate whether to keep particle (false = delete)
             bool keepParticle;
 
+            //- The index of the triangle of the tet which has been hit. -1 if
+            //  the track has stopped inside the tet.
+            label hitIndex;
+
 
         // Constructor
         TrackingData(CloudType& cloud)

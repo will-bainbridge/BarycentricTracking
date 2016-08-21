@@ -210,6 +210,8 @@ Foam::scalar Foam::barycentricParticle::trackToFace
     TrackData& td
 )
 {
+    trackToTri(endPosition, td);
+
     NotImplemented;
 
     return 0.0;
@@ -223,9 +225,95 @@ Foam::scalar Foam::barycentricParticle::trackToTri
     TrackData& td
 )
 {
-    NotImplemented;
+    const vector x0 = position();
+    // !!! <-- We really need the input as a displacement, not an end position
+    const vector x1 = endPosition - x0;
+    const Barycentric<scalar> y0 = barycentric_;
 
-    return 0.0;
+    if (debug)
+    {
+        Info<< "Tracking from " << x0 << " to " << x0 + x1 << endl;
+    }
+
+    // Get the tet geometry
+    vector centre;
+    scalar detA;
+    tensor T;
+    tetReverseTransform(centre, detA, T);
+
+    if (debug)
+    {
+        vector o, b, v1, v2;
+        tetGeometry(o, b, v1, v2);
+        Info<< "Tet points o=" << o << ", b=" << b
+            << ", v1=" << v1 << ", v2=" << v2 << endl
+            << "Tet determinant = " << detA << endl
+            << "Start local coordinates = " << y0 << endl;
+    }
+
+    // Calculate the local tracking displacement
+    const Barycentric<scalar> Tx1 = toBarycentric(T, x1);
+
+    if (debug)
+    {
+        Info<< "Local displacement = " << Tx1 << "/" << detA << endl;
+    }
+
+    // Calculate the hit fraction
+    label iH = -1;
+    scalar muH = detA == 0 ? VGREAT : mag(1/detA);
+    for (label i = 0; i < 4; ++ i)
+    {
+        if (Tx1[i] < 0)
+        {
+            scalar mu = - y0[i]/Tx1[i];
+
+            if (debug)
+            {
+                Info<< "Hit on tet face " << i << " at local coordinate "
+                    << y0 + mu*Tx1 << ", " << mu*detA*100 << "\% of the "
+                    << "way along the track" << endl;
+            }
+
+            if (0 <= mu && mu < muH)
+            {
+                iH = i;
+                muH = mu;
+            }
+        }
+    }
+
+    // Set the new coordinates
+    Barycentric<scalar> yH = y0 + muH*Tx1;
+
+    // Remove tolerance issues in the event of a hit
+    if (iH != -1)
+    {
+        yH.replace(iH, 0);
+    }
+
+    // Set the new position and hit index
+    barycentric_ = yH;
+    td.hitIndex = iH;
+
+    if (debug)
+    {
+        if (iH != -1)
+        {
+            Info<< "Track hit tet face " << iH << " first" << endl;
+        }
+        else
+        {
+            Info<< "Track hit no tet faces" << endl;
+        }
+        Info<< "End local coordinates = " << yH << endl
+            << "End global coordinates = " << position() << endl
+            << "Tracking displacement = " << position() - x0 << endl
+            << muH*detA*100 << "\% of the track completed" << endl;
+    }
+
+    // Return the proportion of the track that has been completed
+    return muH*detA;
 }
 
 
