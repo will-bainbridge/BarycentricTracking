@@ -301,6 +301,31 @@ void Foam::barycentricParticle::movingTetReverseTransform
 }
 
 
+void Foam::barycentricParticle::reflect()
+{
+    Swap(barycentric_.c(), barycentric_.d());
+}
+
+
+void Foam::barycentricParticle::rotate(const bool reverse)
+{
+    if (!reverse)
+    {
+        scalar temp = barycentric_.b();
+        barycentric_.b() = barycentric_.c();
+        barycentric_.c() = barycentric_.d();
+        barycentric_.d() = temp;
+    }
+    else
+    {
+        scalar temp = barycentric_.d();
+        barycentric_.d() = barycentric_.c();
+        barycentric_.c() = barycentric_.b();
+        barycentric_.b() = temp;
+    }
+}
+
+
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
 void Foam::barycentricParticle::transformProperties(const tensor&)

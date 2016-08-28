@@ -210,11 +210,46 @@ Foam::scalar Foam::barycentricParticle::trackToFace
     TrackData& td
 )
 {
-    trackToTri(endPosition, td);
+    scalar trackFraction = 0.0;
 
-    NotImplemented;
+    td.tetTriI = -1;
 
-    return 0.0;
+    facei_ = -1;
+
+    // Tracking loop
+    do
+    {
+        trackFraction += trackToTri(endPosition, td)*(1 - trackFraction);
+
+        if (td.tetTriI == -1)
+        {
+            // The track is complete
+            return trackFraction;
+        }
+        else if (td.tetTriI == 0)
+        {
+            // Set the face so that the loop will exit for face/patch processing
+            facei_ = tetFacei_;
+        }
+        else
+        {
+            // Move to the next tet and continue the track
+            changeTet(td);
+        }
+
+    } while(facei_ == -1);
+
+    // Face/patch processing
+    if (internalFace(facei_))
+    {
+        changeCell(td);
+    }
+    else
+    {
+        NotImplemented;
+    }
+
+    return trackFraction;
 }
 
 
@@ -294,7 +329,7 @@ Foam::scalar Foam::barycentricParticle::trackToTri
 
     // Set the new position and hit index
     barycentric_ = yH;
-    td.hitIndex = iH;
+    td.tetTriI = iH;
 
     if (debug)
     {
@@ -314,6 +349,209 @@ Foam::scalar Foam::barycentricParticle::trackToTri
 
     // Return the proportion of the track that has been completed
     return muH*detA;
+}
+
+
+template<class TrackData>
+void Foam::barycentricParticle::changeTet(const TrackData& td)
+{
+    const bool isOwner = mesh_.faceOwner()[tetFacei_] == celli_;
+
+    const label firstTetPtI = 1;
+    const label lastTetPtI = mesh_.faces()[tetFacei_].size() - 2;
+
+    if (td.tetTriI == 1)
+    {
+        changeFace(td);
+    }
+    else if (td.tetTriI == 2)
+    {
+        if (isOwner)
+        {
+            if (tetPtI_ == lastTetPtI)
+            {
+                changeFace(td);
+            }
+            else
+            {
+                reflect();
+                tetPtI_ += 1;
+            }
+        }
+        else
+        {
+            if (tetPtI_ == firstTetPtI)
+            {
+                changeFace(td);
+            }
+            else
+            {
+                reflect();
+                tetPtI_ -= 1;
+            }
+        }
+    }
+    else if (td.tetTriI == 3)
+    {
+        if (isOwner)
+        {
+            if (tetPtI_ == firstTetPtI)
+            {
+                changeFace(td);
+            }
+            else
+            {
+                reflect();
+                tetPtI_ -= 1;
+            }
+        }
+        else
+        {
+            if (tetPtI_ == lastTetPtI)
+            {
+                changeFace(td);
+            }
+            else
+            {
+                reflect();
+                tetPtI_ += 1;
+            }
+        }
+    }
+    else
+    {
+        FatalErrorInFunction
+            << "Changing tet without changing cell should only happen when the "
+            << "track is on triangle 1, 2 or 3."
+            << exit(FatalError);
+    }
+}
+
+
+template<class TrackData>
+void Foam::barycentricParticle::changeFace(const TrackData& td)
+{
+    // Get the tet topology
+    label basei, vertex1i, vertex2i;
+    tetMeshIndices(basei, vertex1i, vertex2i);
+
+    // Get the shared edge and the pre-rotation
+    edge sharedEdge;
+    if (td.tetTriI == 1)
+    {
+        sharedEdge = edge(vertex1i, vertex2i);
+    }
+    else if (td.tetTriI == 2)
+    {
+        sharedEdge = edge(vertex2i, basei);
+    }
+    else if (td.tetTriI == 3)
+    {
+        sharedEdge = edge(basei, vertex1i);
+    }
+    else
+    {
+        FatalErrorInFunction
+            << "Changing face without changing cell should only happen when the "
+            << "track is on triangle 1, 2 or 3."
+            << exit(FatalError);
+    }
+
+    // Find the face in the same cell that shares the edge, and the
+    // corresponding tetrahedra point
+    tetPtI_ = -1;
+    const label nFaces = mesh_.cells()[celli_].size();
+    for (label cellFaceI = 0; tetPtI_ == -1 && cellFaceI < nFaces; ++ cellFaceI)
+    {
+        const label newFaceI = mesh_.cells()[celli_][cellFaceI];
+
+        // Exclude the current face
+        if (tetFacei_ == newFaceI)
+        {
+            continue;
+        }
+
+        const class face& newFace = mesh_.faces()[newFaceI];
+
+        // Loop over the edges, looking for the shared one
+        label edgeComp = 0;
+        label edgeI = 0;
+        for (; edgeComp == 0 && edgeI < newFace.size(); ++ edgeI)
+        {
+            edgeComp = edge::compare(sharedEdge, newFace.faceEdge(edgeI));
+        }
+
+        // If the face does not contain the edge, then move on to the next face
+        if (edgeComp == 0)
+        {
+            continue;
+        }
+
+        // Correct the edge index based on whether the face is owned or
+        // neighbours the current cell, and whether the comparison was in order
+        // or not
+        const bool isOwner = mesh_.faceOwner()[newFaceI] == celli_;
+        if (isOwner && edgeComp == 1)
+        {
+            edgeI = newFace.prevLabel(edgeI);
+        }
+        else if (!isOwner && edgeComp == -1)
+        {
+            edgeI = newFace.nextLabel(edgeI);
+        }
+
+        // Set the new face and tet point. The loop will now exit as the tet
+        // point has a value.
+        const label newBaseI = max(0, mesh_.tetBasePtIs()[newFaceI]);
+        tetFacei_ = newFaceI;
+        tetPtI_ = (edgeI + newFace.size() - newBaseI) % newFace.size();
+    }
+
+    if (tetPtI_ == -1)
+    {
+        FatalErrorInFunction
+            << "The search for an edge-connected face and tet-point failed."
+            << exit(FatalError);
+    }
+
+    // Pre-rotation puts the shared edge opposite the base of the tetrahedron
+    if (sharedEdge.otherVertex(vertex1i) == -1)
+    {
+        rotate(false);
+    }
+    else if (sharedEdge.otherVertex(vertex2i) == -1)
+    {
+        rotate(true);
+    }
+
+    // Update the new tet topology
+    tetMeshIndices(basei, vertex1i, vertex2i);
+
+    // Reflect to account for the change of triangle orientation on the new face
+    reflect();
+
+    // Post rotation puts the shared edge back in the correct location
+    if (sharedEdge.otherVertex(vertex1i) == -1)
+    {
+        rotate(true);
+    }
+    else if (sharedEdge.otherVertex(vertex2i) == -1)
+    {
+        rotate(false);
+    }
+}
+
+
+template<class TrackData>
+void Foam::barycentricParticle::changeCell(const TrackData& td)
+{
+    // Set the cell to be the one on the other side of the face
+    const label ownerCellI = mesh_.faceOwner()[tetFacei_];
+    const bool isOwner = celli_ == ownerCellI;
+    celli_ = isOwner ? mesh_.faceNeighbour()[tetFacei_] : ownerCellI;
+
+    // Reflect to account for the change of triangle orientation in the new cell
+    reflect();
 }
 
 

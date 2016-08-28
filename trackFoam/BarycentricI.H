@@ -59,7 +59,7 @@ inline Foam::Barycentric<Cmpt>::Barycentric
 //    const Cmpt& vc
 //)
 //:
-//    Barycentric<Cmpt>(va, vb, vc, 1 - va - vb - vc)
+//    Barycentric<Cmpt>(1 - va - vb - vc, va, vb, vc)
 //{
 //}
 
@@ -138,7 +138,7 @@ inline Barycentric<Cmpt> toBarycentric
 )
 {
     const Vector<Cmpt> w = invA&(v - o);
-    return Barycentric<Cmpt>(w.x(), w.y(), w.z(), 1 - w.x() - w.y() - w.z());
+    return Barycentric<Cmpt>(1 - w.x() - w.y() - w.z(), w.x(), w.y(), w.z());
 }
 
 
@@ -150,7 +150,7 @@ inline Barycentric<Cmpt> toBarycentric
 )
 {
     const Vector<Cmpt> w = invA&v;
-    return Barycentric<Cmpt>(w.x(), w.y(), w.z(), - w.x() - w.y() - w.z());
+    return Barycentric<Cmpt>(- w.x() - w.y() - w.z(), w.x(), w.y(), w.z());
 }
 
 
@@ -162,7 +162,7 @@ inline Vector<Cmpt> fromBarycentric
     const Barycentric<Cmpt>& b
 )
 {
-    const Vector<Cmpt> v(b.a(), b.b(), b.c());
+    const Vector<Cmpt> v(b.b(), b.c(), b.d());
     return (A&v) + o;
 }
 
@@ -174,7 +174,7 @@ inline Vector<Cmpt> fromBarycentric
     const Barycentric<Cmpt>& b
 )
 {
-    const Vector<Cmpt> v(b.a(), b.b(), b.c());
+    const Vector<Cmpt> v(b.b(), b.c(), b.d());
     return A&v;
 }
 

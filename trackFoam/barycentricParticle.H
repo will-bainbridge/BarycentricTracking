@@ -115,7 +115,7 @@ public:
 
             //- The index of the triangle of the tet which has been hit. -1 if
             //  the track has stopped inside the tet.
-            label hitIndex;
+            label tetTriI;
 
 
         // Constructor
@@ -271,6 +271,30 @@ public: // private: // <-- !!! Make private
                 FixedList<scalar, 4>& detA,
                 FixedList<tensor, 3>& T
             ) const;
+
+
+        // Transformations
+
+            //- ...
+            void reflect();
+
+            //- ...
+            void rotate(const bool direction);
+
+
+        // Track
+
+            //- ...
+            template<class TrackData>
+            void changeTet(const TrackData& td);
+
+            //- ...
+            template<class TrackData>
+            void changeFace(const TrackData& td);
+
+            //- ...
+            template<class TrackData>
+            void changeCell(const TrackData& td);
 
 
 protected:
