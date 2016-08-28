@@ -275,24 +275,30 @@ public: // private: // <-- !!! Make private
 
         // Transformations
 
-            //- ...
+            //- Reflection transform. Corrects the coordinates when the particle
+            //  moves between two tets which share a base vertex, but for which
+            //  the other two non cell-centre vertices are reversed. All hits
+            //  which retain the same face behave this way, as do face hits.
             void reflect();
 
-            //- ...
+            //- Rotation transform. Corrects the coordinates when the particle
+            //  moves between two tets with different base vertices, but are
+            //  otherwise similarly oriented. Hits which change the face within
+            //  the cell make use of both this and the reflect transform.
             void rotate(const bool direction);
 
 
         // Track
 
-            //- ...
+            //- Change tet within a cell. Called after a triangle is hit.
             template<class TrackData>
             void changeTet(const TrackData& td);
 
-            //- ...
+            //- Change tet face within a cell. Called by changeTet.
             template<class TrackData>
             void changeFace(const TrackData& td);
 
-            //- ...
+            //- Change cell. Called when the particle hits an internal face.
             template<class TrackData>
             void changeCell(const TrackData& td);
 

@@ -60,8 +60,24 @@ void Foam::barycentricParticle::correctAfterParallelTransfer
 
     celli_ = ppp.faceCells()[facei_];
 
+    tetFacei_ = facei_ + ppp.start();
+
+    // Faces either side of a coupled patch have matched base indices. However,
+    // in contrast to crossing an internal face, the coupled faces are numbered
+    // in opposite directions. Therefore, the tets are indexed in reverse.
+    tetPtI_ = mesh_.faces()[tetFacei_].size() - 1 - tetPtI_;
+
+    // The base vertex is the same, but the other two have been swapped. The
+    // coordinates must be corrected to account for this.
+    reflect();
+
     // Have patch transform the position
-    //ppp.transformPosition(position_, facei_); // <-- !!!
+    if (!ppp.parallel() || ppp.separated())
+    {
+        vector pos = position();
+        ppp.transformPosition(pos, facei_);
+        position(pos);
+    }
 
     // Transform the properties
     if (!ppp.parallel())
@@ -78,37 +94,12 @@ void Foam::barycentricParticle::correctAfterParallelTransfer
     {
         const vector& s =
         (
-            (ppp.separation().size() == 1)
+            ppp.separation().size() == 1
           ? ppp.separation()[0]
           : ppp.separation()[facei_]
         );
         transformProperties(-s);
     }
-
-    tetFacei_ = facei_ + ppp.start();
-
-    // Faces either side of a coupled patch have matched base indices,
-    // tetPtI is specified relative to the base point, already and
-    // opposite circulation directions by design, so if the vertices
-    // are:
-    // source:
-    // face    (a b c d e f)
-    // fPtI     0 1 2 3 4 5
-    //            +
-    // destination:
-    // face    (a f e d c b)
-    // fPtI     0 1 2 3 4 5
-    //                  +
-    // where a is the base point of the face are matching , and we
-    // have fPtI = 1 on the source processor face, i.e. vertex b, then
-    // this because of the face circulation direction change, vertex c
-    // is the characterising point on the destination processor face,
-    // giving the destination fPtI as:
-    //     fPtI_d = f.size() - 1 - fPtI_s = 6 - 1 - 1 = 4
-    // This relationship can be verified for other points and sizes of
-    // face.
-
-    tetPtI_ = mesh_.faces()[tetFacei_].size() - 1 - tetPtI_;
 
     // Reset the face index for the next tracking operation
     if (stepFraction_ > (1.0 - SMALL))
@@ -240,13 +231,112 @@ Foam::scalar Foam::barycentricParticle::trackToFace
     } while(facei_ == -1);
 
     // Face/patch processing
+    typedef typename TrackData::cloudType::particleType particleType;
+    particleType& p = static_cast<particleType&>(*this);
+    p.hitFace(td);
     if (internalFace(facei_))
     {
         changeCell(td);
     }
     else
     {
-        NotImplemented;
+        label origFacei = facei_;
+        label patchi = patch(facei_);
+
+        // No action is taken for tetPtI_ for tetFacei_ here. These are handled
+        // by the patch interaction call or later during processor transfer.
+
+        // <-- !!! The proper hitWallFaces method hasn't been implemented here
+        // yet. This is a poor-man's place-holder, which assumes a small
+        // particle that hits the wall within the current tet. To be honest, the
+        // "proper" method is a bit suspect as it only considers tets in the
+        // current cell. If the particle can hit the wall at a location within
+        // another tet it can certainly hit a location outside the cell...
+        const tetIndices faceHitTetIs =
+            polyMeshTetDecomposition::triangleTetIndices
+            (   
+                mesh_,
+                tetFacei_,
+                celli_,
+                tetPtI_
+            );
+
+        if
+        (
+            !p.hitPatch
+            (
+                mesh_.boundaryMesh()[patchi],
+                td,
+                patchi,
+                trackFraction,
+                faceHitTetIs
+            )
+        )
+        {
+            // Did patch interaction model switch patches?
+            if (facei_ != origFacei)
+            {
+                patchi = patch(facei_);
+            }
+
+            const polyPatch& patch = mesh_.boundaryMesh()[patchi];
+
+            if (isA<wedgePolyPatch>(patch))
+            {
+                p.hitWedgePatch
+                (
+                    static_cast<const wedgePolyPatch&>(patch), td
+                );
+            }
+            else if (isA<symmetryPlanePolyPatch>(patch))
+            {
+                p.hitSymmetryPlanePatch
+                (
+                    static_cast<const symmetryPlanePolyPatch&>(patch), td
+                );
+            }
+            else if (isA<symmetryPolyPatch>(patch))
+            {
+                p.hitSymmetryPatch
+                (
+                    static_cast<const symmetryPolyPatch&>(patch), td
+                );
+            }
+            else if (isA<cyclicPolyPatch>(patch))
+            {
+                p.hitCyclicPatch
+                (
+                    static_cast<const cyclicPolyPatch&>(patch), td
+                );
+            }
+            else if (isA<cyclicAMIPolyPatch>(patch))
+            {
+                p.hitCyclicAMIPatch
+                (
+                    static_cast<const cyclicAMIPolyPatch&>(patch),
+                    td,
+                    endPosition - position()
+                );
+            }
+            else if (isA<processorPolyPatch>(patch))
+            {
+                p.hitProcessorPatch
+                (
+                    static_cast<const processorPolyPatch&>(patch), td
+                );
+            }
+            else if (isA<wallPolyPatch>(patch))
+            {
+                p.hitWallPatch
+                (
+                    static_cast<const wallPolyPatch&>(patch), td, faceHitTetIs
+                );
+            }
+            else
+            {
+                p.hitPatch(patch, td);
+            }
+        }
     }
 
     return trackFraction;
@@ -627,6 +717,9 @@ void Foam::barycentricParticle::hitCyclicPatch
     TrackData& td
 )
 {
+    NotImplemented;
+
+    /*
     facei_ = cpp.transformGlobalFace(facei_);
 
     celli_ = mesh_.faceOwner()[facei_];
@@ -665,6 +758,7 @@ void Foam::barycentricParticle::hitCyclicPatch
         );
         transformProperties(-s);
     }
+    */
 }
 
 
@@ -676,6 +770,9 @@ void Foam::barycentricParticle::hitCyclicAMIPatch
     const vector& direction
 )
 {
+    NotImplemented;
+
+    /*
     const cyclicAMIPolyPatch& receiveCpp = cpp.neighbPatch();
 
     // Patch face index on sending side
@@ -725,6 +822,7 @@ void Foam::barycentricParticle::hitCyclicAMIPatch
         );
         transformProperties(-s);
     }
+    */
 }
 
 
